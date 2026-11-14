@@ -2,11 +2,48 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 set -eu
 
+usage() {
+    cat <<'EOF'
+usage: install.sh [--udev]
+
+  --udev   also install the udev rule (runs sudo)
+EOF
+}
+
 here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-python=$(command -v python3)
 libdir=$HOME/.local/lib/ampere
 unitdir=${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user
 dbusdir=${XDG_DATA_HOME:-$HOME/.local/share}/dbus-1/services
+rules=/etc/udev/rules.d/70-ampere-hid.rules
+
+with_udev=0
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --udev) with_udev=1 ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "unknown argument: $1" >&2; usage >&2; exit 2 ;;
+    esac
+    shift
+done
+
+if ! python=$(command -v python3); then
+    echo "python3 is required but was not found in PATH." >&2
+    exit 1
+fi
+
+if ! "$python" -c 'import gi
+gi.require_version("Gio", "2.0")
+gi.require_version("GLib", "2.0")
+from gi.repository import Gio, GLib' 2>/dev/null; then
+    cat >&2 <<'EOF'
+PyGObject (the "gi" module) is missing, so the service cannot start.
+Install it first:
+  Fedora:         sudo dnf install python3-gobject
+  Debian/Ubuntu:  sudo apt install python3-gi
+  Arch:           sudo pacman -S python-gobject
+EOF
+    exit 1
+fi
 
 install -d "$libdir" "$unitdir" "$dbusdir"
 
@@ -27,6 +64,12 @@ sed -e "s|@PYTHON@|$python|g" -e "s|@LIBDIR@|$libdir|g" \
     "$here/org.gnome.shell.extensions.ampere.HidBattery.service.in" \
     > "$dbusdir/org.gnome.shell.extensions.ampere.HidBattery.service"
 
+if [ "$with_udev" -eq 1 ]; then
+    sudo install -m644 "$here/70-ampere-hid.rules" "$rules"
+    sudo udevadm control --reload-rules
+    sudo udevadm trigger --subsystem-match=hidraw
+fi
+
 if command -v systemctl >/dev/null 2>&1; then
     systemctl --user daemon-reload
     # The running session bus only learns about new activation files on reload.
@@ -44,18 +87,22 @@ fi
 cat <<EOF
 Ampere vendor HID battery daemon installed.
 
+Read the battery once:
+  $python $libdir/ampere-hid --once
+
+Inspect devices and diagnose them (neither changes device settings):
+  $python $libdir/ampere-hid --probe
+  $python $libdir/ampere-hid --diagnose
+  $python $libdir/ampere-hid --sniff 3
+EOF
+
+if [ "$with_udev" -eq 0 ]; then
+    cat <<EOF
+
 If a device is not detected, install the udev rule once:
   sudo install -m644 "$here/70-ampere-hid.rules" /etc/udev/rules.d/
   sudo udevadm control --reload-rules
   sudo udevadm trigger --subsystem-match=hidraw
-
-Inspect devices without querying them:
-  $python $libdir/ampere-hid --probe
-
-Diagnose a device (never writes to it):
-  $python $libdir/ampere-hid --diagnose
-  $python $libdir/ampere-hid --sniff 3
-
-Read the battery once:
-  $python $libdir/ampere-hid --once
+or run this script again with --udev.
 EOF
+fi
