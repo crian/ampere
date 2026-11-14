@@ -72,10 +72,15 @@ def idle_exit_seconds():
     if raw is None:
         return DEFAULT_IDLE_EXIT_SECONDS
     try:
-        return int(raw)
+        seconds = int(raw)
     except ValueError:
         log(f"AMPERE_HID_IDLE_EXIT={raw!r} is not a number, using {DEFAULT_IDLE_EXIT_SECONDS}")
         return DEFAULT_IDLE_EXIT_SECONDS
+    if seconds < 0:
+        # A negative timeout would end the service on its first timer.
+        log(f"AMPERE_HID_IDLE_EXIT={raw!r} is negative, disabling the idle exit")
+        return 0
+    return seconds
 
 
 IDLE_EXIT_SECONDS = idle_exit_seconds()
