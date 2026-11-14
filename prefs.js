@@ -3,13 +3,17 @@
 import Adw from 'gi://Adw';
 import Gdk from 'gi://Gdk';
 import Gio from 'gi://Gio';
-import GObject from 'gi://GObject';
 import Gtk from 'gi://Gtk';
 
 import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
 import {fetchDevices, isPeripheral, deviceKey, deviceName} from './utils.js';
-import {readHidBattery} from './hidbattery.js';
+import {
+    HID_BATTERY_BUS_NAME,
+    HID_BATTERY_IFACE,
+    HID_BATTERY_OBJECT_PATH,
+    readHidBattery,
+} from './hidbattery.js';
 
 const toHex = rgba =>
     `#${[rgba.red, rgba.green, rgba.blue].map(v => Math.round(v * 255).toString(16).padStart(2, '0')).join('')}`;
@@ -78,16 +82,15 @@ export default class AmperePrefs extends ExtensionPreferences {
         settings.bind('vendor-hid-enabled', vendorRow, 'active', Gio.SettingsBindFlags.DEFAULT);
         vendor.add(vendorRow);
 
-        let warning = null;
-        const serviceWarning = running => {
-            if (running || warning)
-                return;
-            warning = new Adw.ActionRow({
-                title: _('Companion service not running'),
-                subtitle: _('Install the Ampere HID daemon (see README)'),
-            });
-            vendorRow.bind_property('active', warning, 'visible', GObject.BindingFlags.SYNC_CREATE);
-            vendor.add(warning);
+        // Always present, shown only while the service is missing.
+        const warning = new Adw.ActionRow({
+            title: _('Companion service not running'),
+            subtitle: _('Install the Ampere HID daemon (see README)'),
+            visible: false,
+        });
+        vendor.add(warning);
+        const serviceWarning = ok => {
+            warning.visible = !ok;
         };
         page.add(vendor);
 
@@ -178,6 +181,8 @@ export default class AmperePrefs extends ExtensionPreferences {
                 } catch (e) {
                     console.error(`[ampere] cannot read vendor HID devices: ${e}`);
                 }
+            } else {
+                serviceWarning(true);
             }
 
             if (!alive)
@@ -241,6 +246,18 @@ export default class AmperePrefs extends ExtensionPreferences {
                 console.error(`[ampere] cannot refresh the device list: ${e}`));
         });
         window.connect('destroy', () => settings.disconnect(vendorSettingsId));
+
+        // A freshly started service answers with an empty cache first; the
+        // Changed it emits after its first sweep fills the list.
+        const changedId = Gio.DBus.session.signal_subscribe(
+            HID_BATTERY_BUS_NAME, HID_BATTERY_IFACE, 'Changed', HID_BATTERY_OBJECT_PATH, null,
+            Gio.DBusSignalFlags.NONE, () => {
+                if (settings.get_boolean('vendor-hid-enabled')) {
+                    refreshDevices().catch(e =>
+                        console.error(`[ampere] cannot refresh the device list: ${e}`));
+                }
+            });
+        window.connect('destroy', () => Gio.DBus.session.signal_unsubscribe(changedId));
 
         refreshDevices().catch(e => console.error(`[ampere] cannot fill the device list: ${e}`));
     }
