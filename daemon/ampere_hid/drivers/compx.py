@@ -12,8 +12,9 @@ byte selects the sub-command. The battery query is sub-command 4:
 Percent is payload byte 5 (overall byte 6), byte 7 is the wired/charging flag.
 All 17 bytes sum to 0x55 mod 256, hence the fixed 0x49 in the request.
 
-Reference: Fan4Metal/ATK_tray and the Linux ``hid-vxe-r1`` module. Tested with
-an ATK A9 Max Ultra 2.0 (``373b:11fe``).
+Reference: Fan4Metal/mouse_tray (Compx/Nordic chipset); the same report layout
+is used by the Linux ``hid-vxe-r1`` module. Tested with an ATK A9 Max Ultra 2.0
+(``373b:11fe``).
 """
 
 import time

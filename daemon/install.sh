@@ -90,10 +90,10 @@ Ampere vendor HID battery daemon installed.
 Read the battery once:
   $python $libdir/ampere-hid --once
 
-Inspect devices and diagnose them (neither changes device settings):
-  $python $libdir/ampere-hid --probe
-  $python $libdir/ampere-hid --diagnose
-  $python $libdir/ampere-hid --sniff 3
+Inspect devices and their answers:
+  $python $libdir/ampere-hid --probe      list HID devices and their driver
+  $python $libdir/ampere-hid --diagnose   query the battery, print the raw answers
+  $python $libdir/ampere-hid --sniff 3    dump input reports, no queries
 EOF
 
 if [ "$with_udev" -eq 0 ]; then

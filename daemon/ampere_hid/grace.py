@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Keep the last reading of a device that stopped answering.
 
-A sleeping mouse answers nothing for a while. The panel should keep showing its
-last value instead of dropping the entry immediately, but not forever.
+A sleeping mouse answers nothing, so its panel entry would vanish right away.
+It is kept for a few polls instead.
 """
 
 

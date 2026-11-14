@@ -116,8 +116,7 @@ class AmpereIndicator extends PanelMenu.Button {
         this._box.visible = this._hasItems;
         this.visible = wanted === 'separate' && this._hasItems;
 
-        // Enabling early means quick settings may not exist yet; try again
-        // instead of staying on the separate button for the whole session.
+        // Quick settings may not exist yet when the extension is enabled early.
         if (mode === 'quick-settings' && !qsBox)
             this._retryPlacement();
     }

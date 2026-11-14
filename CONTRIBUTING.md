@@ -81,10 +81,9 @@ selects the panel icon and `state` is `0` discharging, `1` charging, `2` full.
 
 Design notes:
 
-* The hardware sweep runs in a worker thread, so `GetDevices` always answers
-  from the cache. Doing it in the main loop instead costs about 0.4 s with an
-  awake mouse and up to 2 s with sleeping ones, which delays the panel icon
-  after login and can hit the caller's timeout.
+* The sweep runs in a worker thread and `GetDevices` answers from the cache.
+  In the main loop it would take 0.4 s awake and up to 2 s asleep, which delays
+  the icon after login.
 * The result is applied on the main loop, which emits `Changed` only when the
   payload differs.
 * Polling is every 30 s. When a receiver is present but does not answer, the
@@ -93,8 +92,8 @@ Design notes:
   mouse moves, at which point the reading is retried immediately.
 * A device without an answer keeps its last reading for three polls before it
   disappears.
-* Only read-only battery queries are sent. Never add configuration, EEPROM or
-  firmware writes to a driver.
+* A driver only sends battery query commands; it never changes device settings.
+  Do not add configuration, EEPROM or firmware writes.
 
 ## Debugging without D-Bus
 
@@ -107,9 +106,9 @@ python3 -m ampere_hid --diagnose   # devices, matching drivers and raw answers
 python3 -m ampere_hid --sniff 3    # passively dump input reports for 3 s
 ```
 
-`--diagnose` and `--sniff` never write to a device, so they are safe to run on
-unknown hardware. `--sniff` is the way to find devices that push their status on
-their own instead of answering a query.
+`--probe` and `--sniff` do not talk to the device; `--diagnose` sends the
+battery query. None of them changes a setting. `--sniff` finds devices that
+push their status instead of answering a query.
 
 ## Adding a device
 
@@ -118,7 +117,7 @@ their own instead of answering a query.
 2. Inspect the hidraw nodes with `--probe`: VID/PID, interface numbers and
    whether a driver already claims the device.
 3. Work out the protocol, e.g. from the vendor tool with USBPcap, or by probing
-   feature reports by hand. Keep it read-only.
+   feature reports by hand. Only send battery queries, nothing that writes.
 4. Add a driver in `daemon/ampere_hid/drivers/`:
 
    ```python
@@ -173,6 +172,9 @@ Please add a case for every new report layout, including the "no answer" and
 "out of range" variants. Those are what keep a sleeping mouse from showing a
 bogus percentage.
 
+CI compiles the schema, runs these tests and lints Python, JavaScript and shell
+on every push and pull request.
+
 ## Commit messages
 
 Use [Conventional Commits](https://www.conventionalcommits.org/), so the
@@ -189,25 +191,6 @@ chore:    maintenance
 
 Keep the subject imperative and within 50 characters. `CHANGELOG.md` is written
 by hand for now, one entry per EGO version.
-
-## Releasing
-
-1. Add an entry to `CHANGELOG.md` for the version, e.g. `## v1.1 – EGO version 2`.
-2. Tag it and push the tag:
-
-   ```sh
-   git tag -a v1.1 -m "EGO version 2"
-   git push origin v1.1
-   ```
-
-3. The `Release` workflow then builds the package from the tag, checks that it
-   contains no documentation, daemon or screenshot files, and attaches it to a
-   GitHub release. The release notes come from the matching `CHANGELOG.md`
-   section.
-4. Upload the same ZIP to extensions.gnome.org by hand - EGO has no upload API.
-
-`CI` runs on every push and pull request: it compiles the schema, runs the
-parser tests and syntax-checks the JavaScript and shell scripts.
 
 ## Protocol references
 

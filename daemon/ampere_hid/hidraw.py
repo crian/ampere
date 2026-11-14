@@ -78,11 +78,10 @@ class HidNode:
 
     @property
     def key(self):
-        """Stable identifier for the receiver a node belongs to.
+        """Identifier for the receiver a node belongs to.
 
-        The serial served as the key while it was unique. Two identical
-        receivers without one would share it and collapse into a single entry,
-        so the USB path (phys without the interface suffix) is appended then.
+        The serial if there is one, otherwise vendor, product and the USB path:
+        two identical receivers share everything else.
         """
         if self.uniq:
             return self.uniq

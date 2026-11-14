@@ -51,9 +51,9 @@ Maya X, an MCHOSE A7 V2 Pro or an ATK A9. Everything else works without it.
    sudo udevadm trigger --subsystem-match=hidraw
    ```
 
-   The rules list exact product IDs, not whole vendors, so the user does not
-   get access to other HID devices on the same chip (keyboards, for example).
-   If your model is missing, add its ID from `lsusb`.
+   The rules name exact product IDs, so other devices on the same chip
+   (keyboards, for example) stay untouched. If your model is missing, add its
+   ID from `lsusb`.
 
 2. Install the service:
 
@@ -65,11 +65,10 @@ Maya X, an MCHOSE A7 V2 Pro or an ATK A9. Everything else works without it.
 
 3. Turn on "Vendor HID battery" in the extension preferences.
 
-The installer writes `~/.local/lib/ampere/`, a systemd user unit
-(`ampere-hid.service`) and a D-Bus activation file. The unit is not enabled at
-login: D-Bus activation starts it the first time the extension asks for data,
-and it exits again after five minutes without a request
-(`AMPERE_HID_IDLE_EXIT` overrides that, `0` disables it). To remove it again:
+This writes `~/.local/lib/ampere/`, a systemd user unit and a D-Bus activation
+file. The unit is not enabled at login; activation starts it when the extension
+asks, and it exits after five minutes without requests
+(`AMPERE_HID_IDLE_EXIT`, `0` disables). To remove it again:
 
 ```sh
 ./daemon/uninstall.sh
@@ -99,9 +98,9 @@ missing, run the command below. Also check whether its product ID is listed in
 python3 ~/.local/lib/ampere/ampere-hid --diagnose
 ```
 
-It lists every hidraw device, the driver that claims it and the raw answer. It
-only reads, so it is safe to run on unknown hardware. A sleeping mouse answers
-nothing; move it and try again.
+It shows every hidraw device, its driver and the raw answer. It only sends
+battery queries and changes no settings. A sleeping mouse answers nothing; move
+it and try again.
 
 Devices in UPower do not need the service at all. Check them with `upower -e`.
 
