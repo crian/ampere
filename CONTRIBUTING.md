@@ -173,6 +173,23 @@ Please add a case for every new report layout, including the "no answer" and
 "out of range" variants. Those are what keep a sleeping mouse from showing a
 bogus percentage.
 
+## Commit messages
+
+Use [Conventional Commits](https://www.conventionalcommits.org/), so the
+history stays filterable and a changelog could be generated from it later:
+
+```
+feat:     new behaviour
+fix:      bug fix
+docs:     documentation only
+ci:       tests, workflows, packaging
+refactor: no change in behaviour
+chore:    maintenance
+```
+
+Keep the subject imperative and within 50 characters. `CHANGELOG.md` is written
+by hand for now, one entry per EGO version.
+
 ## Releasing
 
 1. Add an entry to `CHANGELOG.md` for the version, e.g. `## v1.1 – EGO version 2`.
