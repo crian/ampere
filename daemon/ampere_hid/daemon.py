@@ -64,7 +64,21 @@ GRACE_POLLS = 3
 # The service is started on demand over D-Bus, so it does not need to keep
 # running once nothing asks for data. After this long without a GetDevices call
 # it exits; the next call starts it again. 0 disables the exit.
-IDLE_EXIT_SECONDS = int(os.environ.get("AMPERE_HID_IDLE_EXIT", "300"))
+DEFAULT_IDLE_EXIT_SECONDS = 300
+
+
+def idle_exit_seconds():
+    raw = os.environ.get("AMPERE_HID_IDLE_EXIT")
+    if raw is None:
+        return DEFAULT_IDLE_EXIT_SECONDS
+    try:
+        return int(raw)
+    except ValueError:
+        log(f"AMPERE_HID_IDLE_EXIT={raw!r} is not a number, using {DEFAULT_IDLE_EXIT_SECONDS}")
+        return DEFAULT_IDLE_EXIT_SECONDS
+
+
+IDLE_EXIT_SECONDS = idle_exit_seconds()
 
 INTROSPECTION_XML = """
 <node>
