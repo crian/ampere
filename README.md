@@ -64,9 +64,10 @@ Maya X, an MCHOSE A7 V2 Pro or an ATK A9. Everything else works without it.
 3. Turn on "Vendor HID battery" in the extension preferences.
 
 The installer writes `~/.local/lib/ampere/`, a systemd user unit
-(`ampere-hid.service`) and a D-Bus activation file. The service starts the
-first time the extension asks for data and stops with your session. To remove
-it again:
+(`ampere-hid.service`) and a D-Bus activation file. The unit is not enabled at
+login: D-Bus activation starts it the first time the extension asks for data,
+and it exits again after five minutes without a request
+(`AMPERE_HID_IDLE_EXIT` overrides that, `0` disables it). To remove it again:
 
 ```sh
 ./daemon/uninstall.sh

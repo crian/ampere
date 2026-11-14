@@ -32,8 +32,10 @@ if command -v systemctl >/dev/null 2>&1; then
     # The running session bus only learns about new activation files on reload.
     systemctl --user reload dbus-broker.service 2>/dev/null ||
         systemctl --user reload dbus.service 2>/dev/null || true
-    systemctl --user enable ampere-hid.service
-    systemctl --user restart ampere-hid.service
+    # Activation on demand is enough: no autostart at login. Older installs may
+    # have enabled the unit, so drop that.
+    systemctl --user disable ampere-hid.service 2>/dev/null || true
+    systemctl --user start ampere-hid.service
 else
     echo "systemd not found; start the daemon manually:"
     echo "  $python $libdir/ampere-hid"

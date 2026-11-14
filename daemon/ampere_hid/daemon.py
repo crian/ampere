@@ -59,6 +59,10 @@ POLL_SECONDS = 30
 # the mouse is moved.
 ACTIVITY_WAIT_SECONDS = 25
 GRACE_POLLS = 3
+# The service is started on demand over D-Bus, so it does not need to keep
+# running once nothing asks for data. After this long without a GetDevices call
+# it exits; the next call starts it again. 0 disables the exit.
+IDLE_EXIT_SECONDS = int(os.environ.get("AMPERE_HID_IDLE_EXIT", "300"))
 
 INTROSPECTION_XML = """
 <node>
@@ -210,6 +214,7 @@ class Daemon:
         self._misses = {}
         self._polling = False
         self._timer = 0
+        self._last_call = time.monotonic()
 
     def _set_payload(self, items):
         payload = json.dumps({"devices": items}, separators=(",", ":"))
@@ -226,6 +231,10 @@ class Daemon:
 
     def _on_timeout(self):
         self._timer = 0
+        if IDLE_EXIT_SECONDS and time.monotonic() - self._last_call > IDLE_EXIT_SECONDS:
+            log(f"no request for {IDLE_EXIT_SECONDS}s, exiting")
+            self._loop.quit()
+            return GLib.SOURCE_REMOVE
         self.request_poll()
         return GLib.SOURCE_REMOVE
 
@@ -292,6 +301,7 @@ class Daemon:
 
     def on_method_call(self, connection, sender, path, iface, method, params, invocation):
         if method == "GetDevices":
+            self._last_call = time.monotonic()
             invocation.return_value(GLib.Variant("(s)", (self._payload,)))
             return
         invocation.return_dbus_error(
@@ -305,6 +315,7 @@ class Daemon:
         )
         self._connection = connection
         # Answer immediately from the (empty) cache; the first sweep follows.
+        self._last_call = time.monotonic()
         self.request_poll()
 
     def on_name_lost(self, connection, name):

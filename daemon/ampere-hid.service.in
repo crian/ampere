@@ -9,5 +9,12 @@ ExecStart=@PYTHON@ @LIBDIR@/ampere-hid
 Restart=on-failure
 RestartSec=5
 
+# The daemon only reads /dev/hidraw nodes and answers D-Bus calls.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+RestrictAddressFamilies=AF_UNIX
+
 [Install]
 WantedBy=default.target
