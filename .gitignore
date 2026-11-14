@@ -12,3 +12,6 @@ schemas/gschemas.compiled
 
 # Unpacked copy of the built extension
 /ampere@crian.shell-extension/
+
+# Node modules (ESLint in CI)
+node_modules/

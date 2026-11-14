@@ -10,9 +10,9 @@ Tested with a Maya X 8K (``373e:001e``, Aurora) and a Thorn receiver
 (``3554:f50d``, Compx). Layout reference: github.com/anany1702/lamzu-ctl
 """
 
+from ..hidraw import can_access, query_feature, warn_permission
 from . import compx
 from .base import Driver
-from ..hidraw import can_access, query_feature, warn_permission
 
 VENDOR_IDS = {0x3554, 0x373E, 0x37B0}
 

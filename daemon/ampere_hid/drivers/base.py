@@ -19,11 +19,9 @@ class Driver:
     def matches(self, device):
         if self.vids and not any(node.vendor in self.vids for node in device.nodes):
             return False
-        if self.products is not None and not any(
-            node.product in self.products for node in device.nodes
-        ):
-            return False
-        return True
+        if self.products is None:
+            return True
+        return any(node.product in self.products for node in device.nodes)
 
     def read(self, device):
         """Return ``(percentage, state)`` or ``None``.

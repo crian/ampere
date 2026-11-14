@@ -38,7 +38,7 @@ const themeColor = actor => {
     try {
         const c = actor.get_theme_node().get_foreground_color();
         return [c.red / 255, c.green / 255, c.blue / 255, c.alpha / 255];
-    } catch (e) {
+    } catch {
         return [1, 1, 1, 1];
     }
 };
@@ -95,7 +95,7 @@ class AmpereIndicator extends PanelMenu.Button {
     _quickSettingsBox() {
         try {
             return Main.panel.statusArea.quickSettings?._indicators ?? null;
-        } catch (e) {
+        } catch {
             return null;
         }
     }

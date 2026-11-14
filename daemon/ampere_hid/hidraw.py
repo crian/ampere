@@ -5,6 +5,7 @@ Vendor mice expose their battery on a hidraw node. Everything platform specific
 lives here, so a driver only implements ``read()``.
 """
 
+import contextlib
 import fcntl
 import glob
 import os
@@ -177,10 +178,8 @@ def wait_for_activity(paths, timeout):
         return bool(readable)
     finally:
         for fd in fds:
-            try:
+            with contextlib.suppress(OSError):
                 os.close(fd)
-            except OSError:
-                pass
 
 
 def drain(fd):

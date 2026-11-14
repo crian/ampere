@@ -10,12 +10,16 @@ Aurora layouts stay compatible with the reference implementation.
 """
 
 import os
+import pathlib
+import sys
 import threading
 import time
 import unittest
 
-from ampere_hid import hidraw
-from ampere_hid.drivers import compx, lamzu, mchose
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+
+from ampere_hid import hidraw  # noqa: E402
+from ampere_hid.drivers import compx, lamzu, mchose  # noqa: E402
 
 
 class CompxTests(unittest.TestCase):

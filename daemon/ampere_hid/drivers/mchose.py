@@ -26,8 +26,8 @@ Reference: HeyOkay/HaloBattery (confirmed on an M7 Ultra) and alexfrih/mchose-li
 
 import time
 
-from .base import Driver
 from ..hidraw import HidHandle, can_access, warn_permission
+from .base import Driver
 
 VENDOR_IDS = {0x5253, 0x3837}
 

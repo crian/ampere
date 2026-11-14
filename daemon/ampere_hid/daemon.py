@@ -21,10 +21,10 @@ Without D-Bus:
   python3 -m ampere_hid --sniff [s]  passively dump input reports
 """
 
+import contextlib
 import json
 import os
 import signal
-import sys
 import threading
 import time
 
@@ -39,6 +39,7 @@ try:
 except (ImportError, ValueError):
     GLibUnix = None
 
+from . import grace  # noqa: E402
 from .drivers import find_driver, matching_drivers  # noqa: E402
 from .hidraw import (  # noqa: E402
     HidHandle,
@@ -274,26 +275,10 @@ class Daemon:
         """Main loop: grace period, payload update and next sweep."""
         self._polling = False
 
-        items = []
-        for device in matched:
-            key = device.key
-            if key in fresh:
-                self._last[key] = fresh[key]
-                self._misses[key] = 0
-                items.append(fresh[key])
-            else:
-                misses = self._misses.get(key, 0) + 1
-                self._misses[key] = misses
-                if key in self._last and misses < GRACE_POLLS:
-                    items.append(self._last[key])
-                else:
-                    self._last.pop(key, None)
-
-        present = {device.key for device in matched}
-        for key in list(self._last):
-            if key not in present:
-                del self._last[key]
-                self._misses.pop(key, None)
+        items = grace.apply(
+            [device.key for device in matched], fresh, self._last, self._misses,
+            GRACE_POLLS,
+        )
 
         self._set_payload(items)
         self._schedule()
@@ -345,10 +330,8 @@ def main(argv):
         seconds = 3.0
         index = argv.index("--sniff")
         if index + 1 < len(argv):
-            try:
+            with contextlib.suppress(ValueError):
                 seconds = float(argv[index + 1])
-            except ValueError:
-                pass
         print(json.dumps({"nodes": sniff(seconds)}, indent=2))
         return 0
 

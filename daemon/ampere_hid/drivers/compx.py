@@ -18,8 +18,8 @@ an ATK A9 Max Ultra 2.0 (``373b:11fe``).
 
 import time
 
-from .base import Driver
 from ..hidraw import HidHandle, can_access, warn_permission
+from .base import Driver
 
 # VIDs seen for the Compx/Nordic 52840 silicon. The Lamzu driver claims the
 # receivers it shares with Lamzu devices (3554, 37b0) and tries the Compx
