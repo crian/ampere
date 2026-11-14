@@ -69,21 +69,23 @@ export async function fetchDevices(cancellable) {
     const reply = await conn.call(BUS, ROOT, BUS, 'EnumerateDevices', null,
         new GLib.VariantType('(ao)'), Gio.DBusCallFlags.NONE, TIMEOUT_MS, cancellable);
     const [paths] = reply.deepUnpack();
-    const out = [];
-    await Promise.all(paths.map(async path => {
+    // Promise.all keeps the order of `paths`, so the panel keeps it too.
+    // Pushing as the answers arrive would reshuffle the entries each poll.
+    const devices = await Promise.all(paths.map(async path => {
         try {
             const r = await conn.call(BUS, path, 'org.freedesktop.DBus.Properties', 'GetAll',
                 new GLib.Variant('(s)', [DEVICE_IFACE]), new GLib.VariantType('(a{sv})'),
                 Gio.DBusCallFlags.NONE, TIMEOUT_MS, cancellable);
             const [props] = r.recursiveUnpack();
-            out.push({path, ...props});
+            return {path, ...props};
         } catch (e) {
             if (isCancelled(e))
                 throw e;
             // device vanished between enumerate and read: ignore
+            return null;
         }
     }));
-    return out;
+    return devices.filter(Boolean);
 }
 
 export const UPOWER = {BUS, ROOT};
