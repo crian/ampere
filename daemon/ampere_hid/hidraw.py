@@ -66,17 +66,27 @@ def warn_permission(path, hint="install the udev rule and reload udev"):
 
 
 class HidNode:
-    def __init__(self, path, vendor, product, name, uniq, interface):
+    def __init__(self, path, vendor, product, name, uniq, interface, phys=""):
         self.path = path
         self.vendor = vendor
         self.product = product
         self.name = name
         self.uniq = uniq
         self.interface = interface
+        self.phys = phys
 
     @property
     def key(self):
-        return self.uniq or f"{self.vendor:04x}:{self.product:04x}"
+        """Stable identifier for the receiver a node belongs to.
+
+        The serial served as the key while it was unique. Two identical
+        receivers without one would share it and collapse into a single entry,
+        so the USB path (phys without the interface suffix) is appended then.
+        """
+        if self.uniq:
+            return self.uniq
+        base = re.sub(r"/input\d+$", "", self.phys) or self.path
+        return f"{self.vendor:04x}:{self.product:04x}:{base}"
 
 
 class HidDevice:
@@ -124,6 +134,7 @@ def enumerate_nodes():
                 name=clean_name(uevent_field(uevent, "HID_NAME")),
                 uniq=uevent_field(uevent, "HID_UNIQ"),
                 interface=int(mi.group(1)) if mi else -1,
+                phys=phys,
             )
         )
     return nodes

@@ -43,8 +43,17 @@ export function isPeripheral(p) {
     return ![KIND.UNKNOWN, KIND.LINE_POWER, KIND.BATTERY, KIND.UPS, KIND.MONITOR].includes(p.Type);
 }
 
-/** Same physical device (cable + receiver) shares serial/model -> merged. */
-export const deviceKey = p => p.Serial || p.Model || p.NativePath;
+/**
+ * Stable key for a device. Two identical devices without a serial would
+ * otherwise collapse into one entry, so fall back to the sysfs path, which is
+ * unique per device and does not change while it stays on the same port.
+ */
+export function deviceKey(p) {
+    if (p.Serial)
+        return p.Serial;
+    const name = p.Model || p.Vendor || 'device';
+    return p.NativePath ? `${name}@${p.NativePath}` : name;
+}
 
 export function deviceName(p) {
     const vendor = p.Vendor ?? '';
