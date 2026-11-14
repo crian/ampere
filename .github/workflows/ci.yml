@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install glib tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libglib2.0-bin
+
+      - name: Compile settings schema
+        run: glib-compile-schemas --strict schemas/
+
+      - name: Python syntax and parser tests
+        run: |
+          cd daemon
+          python3 -m py_compile ampere_hid/*.py ampere_hid/drivers/*.py tests/*.py
+          python3 -m unittest discover -s tests -v
+
+      - name: JavaScript syntax
+        run: |
+          for file in extension.js prefs.js utils.js hidbattery.js; do
+            cp "$file" "/tmp/$file.mjs"
+            node --check "/tmp/$file.mjs"
+          done
+
+      - name: Shell syntax
+        run: |
+          sh -n daemon/install.sh
+          sh -n daemon/uninstall.sh

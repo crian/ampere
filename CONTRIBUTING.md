@@ -173,6 +173,25 @@ Please add a case for every new report layout, including the "no answer" and
 "out of range" variants. Those are what keep a sleeping mouse from showing a
 bogus percentage.
 
+## Releasing
+
+1. Add an entry to `CHANGELOG.md` for the version, e.g. `## v1.1 – EGO version 2`.
+2. Tag it and push the tag:
+
+   ```sh
+   git tag -a v1.1 -m "EGO version 2"
+   git push origin v1.1
+   ```
+
+3. The `Release` workflow then builds the package from the tag, checks that it
+   contains no documentation, daemon or screenshot files, and attaches it to a
+   GitHub release. The release notes come from the matching `CHANGELOG.md`
+   section.
+4. Upload the same ZIP to extensions.gnome.org by hand - EGO has no upload API.
+
+`CI` runs on every push and pull request: it compiles the schema, runs the
+parser tests and syntax-checks the JavaScript and shell scripts.
+
 ## Protocol references
 
 * [anany1702/lamzu-ctl](https://github.com/anany1702/lamzu-ctl) - Compx
