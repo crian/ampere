@@ -86,25 +86,4 @@ export async function fetchDevices(cancellable) {
     return out;
 }
 
-/** Blocking variant, only for the preferences window (own process). */
-export function fetchDevicesSync() {
-    const conn = Gio.DBus.system;
-    const reply = conn.call_sync(BUS, ROOT, BUS, 'EnumerateDevices', null,
-        new GLib.VariantType('(ao)'), Gio.DBusCallFlags.NONE, TIMEOUT_MS, null);
-    const [paths] = reply.deepUnpack();
-    const out = [];
-    for (const path of paths) {
-        try {
-            const r = conn.call_sync(BUS, path, 'org.freedesktop.DBus.Properties', 'GetAll',
-                new GLib.Variant('(s)', [DEVICE_IFACE]), new GLib.VariantType('(a{sv})'),
-                Gio.DBusCallFlags.NONE, TIMEOUT_MS, null);
-            const [props] = r.recursiveUnpack();
-            out.push({path, ...props});
-        } catch (e) {
-            // ignore vanished devices
-        }
-    }
-    return out;
-}
-
 export const UPOWER = {BUS, ROOT};

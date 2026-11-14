@@ -8,8 +8,8 @@ import Gtk from 'gi://Gtk';
 
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
-import {fetchDevicesSync, isPeripheral, deviceKey, deviceName} from './utils.js';
-import {readHidBatterySync} from './hidbattery.js';
+import {fetchDevices, isPeripheral, deviceKey, deviceName} from './utils.js';
+import {readHidBattery} from './hidbattery.js';
 
 const toHex = rgba =>
     `#${[rgba.red, rgba.green, rgba.blue].map(v => Math.round(v * 255).toString(16).padStart(2, '0')).join('')}`;
@@ -17,9 +17,15 @@ const toHex = rgba =>
 export default class AmperePrefs extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();
-        const vendorHid = readHidBatterySync();
         const page = new Adw.PreferencesPage({title: 'General', icon_name: 'preferences-system-symbolic'});
         window.add(page);
+
+        // Everything below is built without waiting for D-Bus, so the window
+        // opens immediately; the device list fills in when the answers arrive.
+        let alive = true;
+        window.connect('destroy', () => {
+            alive = false;
+        });
 
         // --- Placement ---
         const placement = new Adw.PreferencesGroup({title: 'Placement'});
@@ -55,31 +61,30 @@ export default class AmperePrefs extends ExtensionPreferences {
         ]);
 
         // --- Vendor HID devices (not in UPower) ---
-        // Only shown when the service answers or the user enabled it.
-        if (vendorHid.ok || settings.get_boolean('vendor-hid-enabled')) {
-            const vendor = new Adw.PreferencesGroup({
-                title: 'Vendor HID devices',
-                description: 'Optional: devices that do not report their battery to UPower, ' +
-                    'e.g. Lamzu mice. Requires the separate Ampere HID companion service.',
-            });
-            const vendorRow = new Adw.SwitchRow({
-                title: 'Show vendor HID battery',
-                subtitle: 'Provided by the companion service over D-Bus',
-            });
-            settings.bind('vendor-hid-enabled', vendorRow, 'active', Gio.SettingsBindFlags.DEFAULT);
-            vendor.add(vendorRow);
+        const vendor = new Adw.PreferencesGroup({
+            title: 'Vendor HID devices',
+            description: 'Optional: devices that do not report their battery to UPower, ' +
+                'e.g. Lamzu mice. Requires the separate Ampere HID companion service.',
+        });
+        const vendorRow = new Adw.SwitchRow({
+            title: 'Show vendor HID battery',
+            subtitle: 'Provided by the companion service over D-Bus',
+        });
+        settings.bind('vendor-hid-enabled', vendorRow, 'active', Gio.SettingsBindFlags.DEFAULT);
+        vendor.add(vendorRow);
 
-            if (!vendorHid.ok) {
-                const warning = new Adw.ActionRow({
-                    title: 'Companion service not running',
-                    subtitle: 'Install the Ampere HID daemon (see README)',
-                });
-                vendorRow.bind_property('active', warning, 'visible',
-                    GObject.BindingFlags.SYNC_CREATE);
-                vendor.add(warning);
-            }
-            page.add(vendor);
-        }
+        let warning = null;
+        const serviceWarning = running => {
+            if (running || warning)
+                return;
+            warning = new Adw.ActionRow({
+                title: 'Companion service not running',
+                subtitle: 'Install the Ampere HID daemon (see README)',
+            });
+            vendorRow.bind_property('active', warning, 'visible', GObject.BindingFlags.SYNC_CREATE);
+            vendor.add(warning);
+        };
+        page.add(vendor);
 
         // --- Level colors ---
         const colors = new Adw.PreferencesGroup({
@@ -117,42 +122,71 @@ export default class AmperePrefs extends ExtensionPreferences {
         addSpin('threshold-low', 'Low up to (%)', 'At or below this value the low color is used', 1, 98);
         page.add(colors);
 
-        // --- Devices (own process, so a blocking call is fine here) ---
-        const devices = new Map();
-        try {
-            for (const d of fetchDevicesSync()) {
-                if (isPeripheral(d))
-                    devices.set(deviceKey(d), deviceName(d));
-            }
-        } catch (e) {
-            console.error(`[ampere] cannot read UPower devices: ${e}`);
-        }
-        for (const item of vendorHid.items)
-            devices.set(item.key, item.name);
-        const hidden = new Set(settings.get_strv('hidden-devices'));
-        for (const key of hidden) {
-            if (!devices.has(key))
-                devices.set(key, `${key} (not connected)`);
-        }
-
+        // --- Devices, filled asynchronously ---
         const group = new Adw.PreferencesGroup({
             title: 'Devices',
             description: 'Choose which devices are shown. A device reported twice (cable and receiver) is merged automatically.',
         });
-        if (!devices.size)
-            group.add(new Adw.ActionRow({title: 'No devices found', subtitle: 'Check "upower -e"'}));
-        for (const [key, name] of devices) {
-            const row = new Adw.SwitchRow({title: name, subtitle: key, active: !hidden.has(key)});
-            row.connect('notify::active', () => {
-                const list = new Set(settings.get_strv('hidden-devices'));
-                if (row.active)
-                    list.delete(key);
-                else
-                    list.add(key);
-                settings.set_strv('hidden-devices', [...list]);
-            });
-            group.add(row);
-        }
+        const loading = new Adw.ActionRow({title: 'Loading devices…'});
+        group.add(loading);
         page.add(group);
+
+        const fillDevices = async () => {
+            const devices = new Map();
+            try {
+                for (const device of await fetchDevices(null)) {
+                    if (isPeripheral(device))
+                        devices.set(deviceKey(device), deviceName(device));
+                }
+            } catch (e) {
+                console.error(`[ampere] cannot read UPower devices: ${e}`);
+            }
+
+            // The vendor service is only asked when it is enabled, so opening
+            // the window neither starts the daemon nor blocks on it.
+            if (settings.get_boolean('vendor-hid-enabled')) {
+                try {
+                    const result = await readHidBattery(null);
+                    serviceWarning(result.ok);
+                    for (const item of result.items)
+                        devices.set(item.key, item.name);
+                } catch (e) {
+                    console.error(`[ampere] cannot read vendor HID devices: ${e}`);
+                }
+            }
+
+            if (!alive)
+                return;
+
+            const hidden = new Set(settings.get_strv('hidden-devices'));
+            for (const key of hidden) {
+                if (!devices.has(key))
+                    devices.set(key, `${key} (not connected)`);
+            }
+
+            group.remove(loading);
+            if (!devices.size) {
+                group.add(new Adw.ActionRow({
+                    title: 'No devices found',
+                    subtitle: 'Check "upower -e"',
+                }));
+                return;
+            }
+
+            for (const [key, name] of devices) {
+                const row = new Adw.SwitchRow({title: name, subtitle: key, active: !hidden.has(key)});
+                row.connect('notify::active', () => {
+                    const list = new Set(settings.get_strv('hidden-devices'));
+                    if (row.active)
+                        list.delete(key);
+                    else
+                        list.add(key);
+                    settings.set_strv('hidden-devices', [...list]);
+                });
+                group.add(row);
+            }
+        };
+
+        fillDevices().catch(e => console.error(`[ampere] cannot fill the device list: ${e}`));
     }
 }

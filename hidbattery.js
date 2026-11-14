@@ -73,17 +73,3 @@ export async function readHidBattery(cancellable) {
         throw e;
     }
 }
-
-/** Blocking query, only for the preferences window (own process). */
-export function readHidBatterySync() {
-    try {
-        const reply = Gio.DBus.session.call_sync(
-            HID_BATTERY_BUS_NAME, HID_BATTERY_OBJECT_PATH, HID_BATTERY_IFACE,
-            'GetDevices', null, new GLib.VariantType('(s)'),
-            Gio.DBusCallFlags.NONE, 5000, null);
-        const [json] = reply.deepUnpack();
-        return {items: parse(json), ok: true};
-    } catch (e) {
-        return {items: [], ok: false};
-    }
-}
