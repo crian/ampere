@@ -1,31 +1,71 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# Vendor HID devices expose their battery through vendor reports. Grant the
-# logged-in user access to the hidraw nodes so the companion daemon can query
-# them without root.
+# Grant the logged-in user access to the hidraw nodes of supported mice, so the
+# companion service can query them without root.
 #
-# Add one line per supported device. Prefer exact VID/PID pairs over
-# vendor-wide rules: broad rules also grant access to keyboards and other HID
-# devices from the same vendor.
+# The rules list exact product IDs on purpose: hidraw access to a shared vendor
+# ID would also cover keyboards and other devices built on the same chip
+# (unknown MCHOSE keyboards sit on 3837, for example). For a model that is not
+# listed, add its idProduct from `lsusb`.
 #
 # Install:
 #   sudo install -m644 70-ampere-hid.rules /etc/udev/rules.d/
 #   sudo udevadm control --reload-rules
 #   sudo udevadm trigger --subsystem-match=hidraw
+# or run: ./install.sh --udev
 
-# --- Lamzu / Compx (Maya X 8K, Inca, Paro, Champion, and the shared Compx
-#     Maya/Atlantis-family receivers 3554:f510 / f50f / f50d) ---
-SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3554", MODE="0660", TAG+="uaccess"
-SUBSYSTEM=="hidraw", ATTRS{idVendor}=="373e", MODE="0660", TAG+="uaccess"
-SUBSYSTEM=="hidraw", ATTRS{idVendor}=="37b0", MODE="0660", TAG+="uaccess"
+# --- Lamzu / Compx receivers ---
+# Maya X 8K (373e:001e, wired 001c), Thorn and Maya/Atlantis Compx receivers
+# (3554:f50d, f50f, f510), Inca and Paro and Maya Champion (37b0:...)
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="373e", ATTRS{idProduct}=="001e", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="373e", ATTRS{idProduct}=="001c", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3554", ATTRS{idProduct}=="f50d", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3554", ATTRS{idProduct}=="f50f", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3554", ATTRS{idProduct}=="f510", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="37b0", ATTRS{idProduct}=="0001", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="37b0", ATTRS{idProduct}=="0007", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="37b0", ATTRS{idProduct}=="000d", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="37b0", ATTRS{idProduct}=="000e", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="37b0", ATTRS{idProduct}=="0010", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="37b0", ATTRS{idProduct}=="0011", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="37b0", ATTRS{idProduct}=="0015", MODE="0660", TAG+="uaccess"
 
-# --- Compx / Nordic receivers (ATK, VXE, VGN, Zaopin, Scyrox, Dareu, ...) ---
-SUBSYSTEM=="hidraw", ATTRS{idVendor}=="373b", MODE="0660", TAG+="uaccess"
-SUBSYSTEM=="hidraw", ATTRS{idVendor}=="260d", MODE="0660", TAG+="uaccess"
-SUBSYSTEM=="hidraw", ATTRS{idVendor}=="33e4", MODE="0660", TAG+="uaccess"
+# --- Compx / Nordic receivers: ATK, VXE, VGN, Zaopin, Scyrox ---
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="373b", ATTRS{idProduct}=="102e", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="373b", ATTRS{idProduct}=="1031", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="373b", ATTRS{idProduct}=="103f", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="373b", ATTRS{idProduct}=="1040", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="373b", ATTRS{idProduct}=="104c", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="373b", ATTRS{idProduct}=="104d", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="373b", ATTRS{idProduct}=="1085", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="373b", ATTRS{idProduct}=="11b6", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="373b", ATTRS{idProduct}=="11d9", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="373b", ATTRS{idProduct}=="11fe", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3554", ATTRS{idProduct}=="f503", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3554", ATTRS{idProduct}=="f502", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3554", ATTRS{idProduct}=="f524", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3554", ATTRS{idProduct}=="f526", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3554", ATTRS{idProduct}=="f58a", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3554", ATTRS{idProduct}=="f58c", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3554", ATTRS{idProduct}=="f58e", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3554", ATTRS{idProduct}=="f58f", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3554", ATTRS{idProduct}=="f5f6", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3554", ATTRS{idProduct}=="f5f7", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3554", ATTRS{idProduct}=="fb3d", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3554", ATTRS{idProduct}=="fb3e", MODE="0660", TAG+="uaccess"
 
-# --- MCHOSE / RealTek (0x5253 = L7/M7 family, 0x3837 = A7 V2 / K7 and newer) ---
-# 0x3837 is a chip-vendor id that other brands share, so this is the one broad
-# rule here; it grants only the logged-in user access (TAG+="uaccess").
-SUBSYSTEM=="hidraw", ATTRS{idVendor}=="5253", MODE="0660", TAG+="uaccess"
-SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3837", MODE="0660", TAG+="uaccess"
+# --- Compx rebrands: Dareu, G-Wolves ---
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="260d", ATTRS{idProduct}=="1154", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="260d", ATTRS{idProduct}=="1175", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="260d", ATTRS{idProduct}=="1193", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="260d", ATTRS{idProduct}=="1196", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="33e4", ATTRS{idProduct}=="3854", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="33e4", ATTRS{idProduct}=="4719", MODE="0660", TAG+="uaccess"
+
+# --- MCHOSE ---
+# Mice only: keyboards and the V9 headset on the same vendor IDs are left out.
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3837", ATTRS{idProduct}=="1001", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3837", ATTRS{idProduct}=="100a", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3837", ATTRS{idProduct}=="100b", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="5253", ATTRS{idProduct}=="0031", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="5253", ATTRS{idProduct}=="1020", MODE="0660", TAG+="uaccess"

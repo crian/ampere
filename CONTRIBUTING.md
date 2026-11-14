@@ -155,9 +155,9 @@ their own instead of answering a query.
    DRIVERS = [LamzuDriver(), CompxDriver(), MchoseDriver(), MyVendorDriver()]
    ```
 
-6. Add the device's VID/PID to `daemon/70-ampere-hid.rules`. Prefer exact
-   VID/PID pairs over vendor-wide rules: a broad rule also grants access to
-   keyboards and other HID devices from the same vendor.
+6. Add the device's VID:PID to `daemon/70-ampere-hid.rules`. The rules are per
+   product ID on purpose: a vendor-wide rule would also grant access to
+   keyboards and other HID devices on the same chip.
 7. Test with `--probe`, `--diagnose` and `--once`, then add parser tests.
 8. Note in the README table whether it was verified on real hardware.
 

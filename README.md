@@ -51,6 +51,10 @@ Maya X, an MCHOSE A7 V2 Pro or an ATK A9. Everything else works without it.
    sudo udevadm trigger --subsystem-match=hidraw
    ```
 
+   The rules list exact product IDs, not whole vendors, so the user does not
+   get access to other HID devices on the same chip (keyboards, for example).
+   If your model is missing, add its ID from `lsusb`.
+
 2. Install the service:
 
    ```sh
@@ -83,7 +87,8 @@ The udev rule has to be deleted by hand, since it belongs to root.
 | Other MCHOSE receivers (`3837`, `5253`) | MCHOSE feature query | not tested |
 
 Only the rows marked "yes" were checked on real hardware. If your model is
-missing, run the command below.
+missing, run the command below. Also check whether its product ID is listed in
+`daemon/70-ampere-hid.rules`; if it is not, add the VID:PID that `lsusb` shows.
 
 ### If a device does not show up
 
