@@ -49,6 +49,7 @@ from .hidraw import (  # noqa: E402
     log,
     wait_for_activity,
 )
+from .sweep import query_all, read_devices  # noqa: E402
 
 BUS_NAME = "org.gnome.shell.extensions.ampere.HidBattery"
 OBJECT_PATH = "/org/gnome/shell/extensions/ampere/HidBattery"
@@ -75,35 +76,6 @@ INTROSPECTION_XML = """
   </interface>
 </node>
 """
-
-
-def read_devices():
-    """Return (matched devices, fresh battery items)."""
-    devices = group_nodes(enumerate_nodes())
-    matched = []
-    fresh = {}
-    for device in devices:
-        driver = find_driver(device)
-        if driver is None:
-            continue
-        matched.append(device)
-        battery = driver.read(device)
-        if not battery:
-            continue
-        level, state = battery
-        fresh[device.key] = {
-            "key": device.key,
-            "name": device.name,
-            "kind": driver.kind,
-            "pct": level,
-            "state": state,
-        }
-    return matched, fresh
-
-
-def query_all():
-    matched, fresh = read_devices()
-    return list(fresh.values()), len(matched)
 
 
 def probe():
