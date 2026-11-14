@@ -172,8 +172,9 @@ Please add a case for every new report layout, including the "no answer" and
 "out of range" variants. Those are what keep a sleeping mouse from showing a
 bogus percentage.
 
-CI compiles the schema, runs these tests and lints Python, JavaScript and shell
-on every push and pull request.
+CI compiles the schema, runs these tests, lints Python, JavaScript and shell,
+and builds the extension package to check that it contains only extension
+files.
 
 ## Commit messages
 

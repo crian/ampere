@@ -29,7 +29,7 @@ jobs:
         run: python3 -m unittest discover -s daemon/tests -v
 
       - name: Lint JavaScript
-        run: npx --yes eslint@9 extension.js prefs.js utils.js hidbattery.js
+        run: npx --yes eslint@10 extension.js prefs.js utils.js hidbattery.js
 
       - name: Lint shell scripts
         run: shellcheck -S error daemon/install.sh daemon/uninstall.sh
@@ -38,3 +38,31 @@ jobs:
         run: |
           bash -n daemon/install.sh
           bash -n daemon/uninstall.sh
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # gnome-extensions packaging ships with gnome-shell.
+      - name: Install packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gnome-shell
+
+      - name: Build the package
+        run: |
+          glib-compile-schemas schemas/
+          gnome-extensions pack --force \
+            --extra-source=utils.js \
+            --extra-source=hidbattery.js \
+            --extra-source=LICENSE
+
+      - name: Check the package contents
+        run: |
+          unzip -l ampere@crian.shell-extension.zip
+          if unzip -l ampere@crian.shell-extension.zip \
+              | grep -E 'daemon/|README|CONTRIBUTING|screenshots/|\.png'; then
+            echo "package contains files that do not belong there" >&2
+            exit 1
+          fi
