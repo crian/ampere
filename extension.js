@@ -8,7 +8,7 @@ import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
-import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
+import {Extension, gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {ICONS, STATE, UPOWER, fetchDevices, isCancelled, isPeripheral, deviceKey, deviceName} from './utils.js';
 import {HID_BATTERY_BUS_NAME, HID_BATTERY_IFACE, HID_BATTERY_OBJECT_PATH, readHidBattery} from './hidbattery.js';
@@ -18,9 +18,9 @@ const POLL_SECONDS = 30;
 
 const stateText = state => {
     switch (state) {
-    case S.CHARGING: return 'Charging';
-    case S.DISCHARGING: return 'Discharging';
-    case S.FULLY_CHARGED: return 'Fully charged';
+    case S.CHARGING: return _('Charging');
+    case S.DISCHARGING: return _('Discharging');
+    case S.FULLY_CHARGED: return _('Fully charged');
     default: return '';
     }
 };
@@ -61,6 +61,8 @@ class AmpereIndicator extends PanelMenu.Button {
         this._settings = settings;
         this._mode = null;
         this._hasItems = false;
+        this._placeRetries = 0;
+        this._placeRetryId = 0;
         this.add_style_class_name('ampere-button');
 
         this._box = new St.BoxLayout({
@@ -89,10 +91,19 @@ class AmpereIndicator extends PanelMenu.Button {
         this._place();
     }
 
+    // The quick settings container is private API, so read it defensively.
+    _quickSettingsBox() {
+        try {
+            return Main.panel.statusArea.quickSettings?._indicators ?? null;
+        } catch (e) {
+            return null;
+        }
+    }
+
     // Own button next to the quick settings, or inside the quick settings icon row.
     _place() {
         const mode = this._settings.get_string('placement');
-        const qsBox = Main.panel.statusArea.quickSettings?._indicators;
+        const qsBox = this._quickSettingsBox();
         const wanted = mode === 'quick-settings' && qsBox ? 'quick-settings' : 'separate';
         if (wanted !== this._mode) {
             this._box.get_parent()?.remove_child(this._box);
@@ -104,6 +115,25 @@ class AmpereIndicator extends PanelMenu.Button {
         }
         this._box.visible = this._hasItems;
         this.visible = wanted === 'separate' && this._hasItems;
+
+        // Enabling early means quick settings may not exist yet; try again
+        // instead of staying on the separate button for the whole session.
+        if (mode === 'quick-settings' && !qsBox)
+            this._retryPlacement();
+    }
+
+    _retryPlacement() {
+        if (this._placeRetryId || this._placeRetries >= 20)
+            return;
+        this._placeRetries++;
+        this._placeRetryId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+            this._placeRetryId = 0;
+            if (this._quickSettingsBox()) {
+                this._placeRetries = 0;
+                this._place();
+            }
+            return GLib.SOURCE_REMOVE;
+        });
     }
 
     _showTooltip() {
@@ -223,6 +253,10 @@ class AmpereIndicator extends PanelMenu.Button {
     }
 
     destroy() {
+        if (this._placeRetryId) {
+            GLib.source_remove(this._placeRetryId);
+            this._placeRetryId = 0;
+        }
         this._tooltip?.destroy();
         this._tooltip = null;
         this._box?.destroy();

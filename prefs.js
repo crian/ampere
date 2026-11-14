@@ -6,7 +6,7 @@ import Gio from 'gi://Gio';
 import GObject from 'gi://GObject';
 import Gtk from 'gi://Gtk';
 
-import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
+import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
 import {fetchDevices, isPeripheral, deviceKey, deviceName} from './utils.js';
 import {readHidBattery} from './hidbattery.js';
@@ -17,7 +17,10 @@ const toHex = rgba =>
 export default class AmperePrefs extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();
-        const page = new Adw.PreferencesPage({title: 'General', icon_name: 'preferences-system-symbolic'});
+        const page = new Adw.PreferencesPage({
+            title: _('General'),
+            icon_name: 'preferences-system-symbolic',
+        });
         window.add(page);
 
         // Everything below is built without waiting for D-Bus, so the window
@@ -28,12 +31,14 @@ export default class AmperePrefs extends ExtensionPreferences {
         });
 
         // --- Placement ---
-        const placement = new Adw.PreferencesGroup({title: 'Placement'});
+        const placement = new Adw.PreferencesGroup({title: _('Placement')});
         const values = ['separate', 'quick-settings'];
         const combo = new Adw.ComboRow({
-            title: 'Position in the top bar',
-            subtitle: 'Own button next to the system menu, or between the other system icons',
-            model: new Gtk.StringList({strings: ['Own button', 'Inside the system icons']}),
+            title: _('Position in the top bar'),
+            subtitle: _('Own button next to the system menu, or between the other system icons'),
+            model: new Gtk.StringList({
+                strings: [_('Own button'), _('Inside the system icons')],
+            }),
         });
         combo.selected = Math.max(0, values.indexOf(settings.get_string('placement')));
         combo.connect('notify::selected', () => settings.set_string('placement', values[combo.selected]));
@@ -50,25 +55,25 @@ export default class AmperePrefs extends ExtensionPreferences {
             }
             page.add(group);
         };
-        addSwitches('Panel indicator', [
-            ['show-icon', 'Show device icon', 'Mouse, keyboard, ... icon'],
-            ['show-bar', 'Show battery bar', 'Vertical bar showing the charge level'],
-            ['show-percentage', 'Show percentage', 'Numeric charge level next to the bar'],
-            ['colored-bar', 'Colored bar', 'Off = monochrome, same color as the other panel icons'],
+        addSwitches(_('Panel indicator'), [
+            ['show-icon', _('Show device icon'), _('Mouse, keyboard, ... icon')],
+            ['show-bar', _('Show battery bar'), _('Vertical bar showing the charge level')],
+            ['show-percentage', _('Show percentage'), _('Numeric charge level next to the bar')],
+            ['colored-bar', _('Colored bar'), _('Off = monochrome, same color as the other panel icons')],
         ]);
-        addSwitches('Info card', [
-            ['hover-card', 'Show on hover', 'Show name, ring and percentage when hovering the indicator'],
+        addSwitches(_('Info card'), [
+            ['hover-card', _('Show on hover'), _('Show name, ring and percentage when hovering the indicator')],
         ]);
 
         // --- Vendor HID devices (not in UPower) ---
         const vendor = new Adw.PreferencesGroup({
-            title: 'Vendor HID devices',
-            description: 'Optional: devices that do not report their battery to UPower, ' +
-                'e.g. Lamzu mice. Requires the separate Ampere HID companion service.',
+            title: _('Vendor HID devices'),
+            description: _('Optional: devices that do not report their battery to UPower, ' +
+                'e.g. Lamzu mice. Requires the separate Ampere HID companion service.'),
         });
         const vendorRow = new Adw.SwitchRow({
-            title: 'Show vendor HID battery',
-            subtitle: 'Provided by the companion service over D-Bus',
+            title: _('Show vendor HID battery'),
+            subtitle: _('Provided by the companion service over D-Bus'),
         });
         settings.bind('vendor-hid-enabled', vendorRow, 'active', Gio.SettingsBindFlags.DEFAULT);
         vendor.add(vendorRow);
@@ -78,8 +83,8 @@ export default class AmperePrefs extends ExtensionPreferences {
             if (running || warning)
                 return;
             warning = new Adw.ActionRow({
-                title: 'Companion service not running',
-                subtitle: 'Install the Ampere HID daemon (see README)',
+                title: _('Companion service not running'),
+                subtitle: _('Install the Ampere HID daemon (see README)'),
             });
             vendorRow.bind_property('active', warning, 'visible', GObject.BindingFlags.SYNC_CREATE);
             vendor.add(warning);
@@ -88,8 +93,8 @@ export default class AmperePrefs extends ExtensionPreferences {
 
         // --- Level colors ---
         const colors = new Adw.PreferencesGroup({
-            title: 'Level colors',
-            description: 'Used when "Colored bar" is on (bar and ring).',
+            title: _('Level colors'),
+            description: _('Used when "Colored bar" is on (bar and ring).'),
         });
         const addColor = (key, title) => {
             const button = new Gtk.ColorDialogButton({
@@ -104,10 +109,10 @@ export default class AmperePrefs extends ExtensionPreferences {
             row.add_suffix(button);
             colors.add(row);
         };
-        addColor('color-high', 'High charge');
-        addColor('color-medium', 'Medium charge');
-        addColor('color-low', 'Low charge');
-        addColor('color-charging', 'Charging');
+        addColor('color-high', _('High charge'));
+        addColor('color-medium', _('Medium charge'));
+        addColor('color-low', _('Low charge'));
+        addColor('color-charging', _('Charging'));
 
         const addSpin = (key, title, subtitle, lower, upper) => {
             const row = new Adw.SpinRow({
@@ -118,16 +123,30 @@ export default class AmperePrefs extends ExtensionPreferences {
             settings.bind(key, row, 'value', Gio.SettingsBindFlags.DEFAULT);
             colors.add(row);
         };
-        addSpin('threshold-medium', 'Medium up to (%)', 'Above this value the high color is used', 2, 99);
-        addSpin('threshold-low', 'Low up to (%)', 'At or below this value the low color is used', 1, 98);
+        addSpin('threshold-medium', _('Medium up to (%)'),
+            _('Above this value the high color is used'), 2, 99);
+        addSpin('threshold-low', _('Low up to (%)'),
+            _('At or below this value the low color is used'), 1, 98);
         page.add(colors);
+
+        // The low threshold must stay below the medium one; keep it in range
+        // when either value changes.
+        const clampThresholds = () => {
+            const medium = settings.get_int('threshold-medium');
+            const low = settings.get_int('threshold-low');
+            if (low >= medium)
+                settings.set_int('threshold-low', Math.max(1, medium - 1));
+        };
+        settings.connect('changed::threshold-medium', clampThresholds);
+        settings.connect('changed::threshold-low', clampThresholds);
 
         // --- Devices, filled asynchronously ---
         const group = new Adw.PreferencesGroup({
-            title: 'Devices',
-            description: 'Choose which devices are shown. A device reported twice (cable and receiver) is merged automatically.',
+            title: _('Devices'),
+            description: _('Choose which devices are shown. A device reported twice ' +
+                '(cable and receiver) is merged automatically.'),
         });
-        const loading = new Adw.ActionRow({title: 'Loading devices…'});
+        const loading = new Adw.ActionRow({title: _('Loading devices…')});
         group.add(loading);
         page.add(group);
 
@@ -161,14 +180,14 @@ export default class AmperePrefs extends ExtensionPreferences {
             const hidden = new Set(settings.get_strv('hidden-devices'));
             for (const key of hidden) {
                 if (!devices.has(key))
-                    devices.set(key, `${key} (not connected)`);
+                    devices.set(key, _('%s (not connected)').replace('%s', key));
             }
 
             group.remove(loading);
             if (!devices.size) {
                 group.add(new Adw.ActionRow({
-                    title: 'No devices found',
-                    subtitle: 'Check "upower -e"',
+                    title: _('No devices found'),
+                    subtitle: _('Check "upower -e"'),
                 }));
                 return;
             }
