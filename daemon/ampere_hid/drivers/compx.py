@@ -7,10 +7,14 @@ byte selects the sub-command. The battery query is sub-command 4:
 
     write   08 04 00 00 00 00 00 00 00 00 00 00 00 00 00 00 49
     read    08 04 00 00 00 02 23 00 0e 94 00 00 00 00 00 00 82
-            ^id ^sub          ^st ^%  ^v(voltage mV)         ^checksum
 
-Percent is payload byte 5 (overall byte 6), byte 7 is the wired/charging flag.
-All 17 bytes sum to 0x55 mod 256, hence the fixed 0x49 in the request.
+    byte 0     report ID
+    byte 1     sub-command (4 = battery)
+    byte 5     status, unused
+    byte 6     battery percent (0x23 = 35)
+    byte 7     wired/charging flag
+    bytes 8-9  voltage in mV (0x0e94 = 3732)
+    byte 16    checksum; all 17 bytes add up to 0x55
 
 Reference: Fan4Metal/mouse_tray (Compx/Nordic chipset); the same report layout
 is used by the Linux ``hid-vxe-r1`` module. Tested with an ATK A9 Max Ultra 2.0
