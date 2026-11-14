@@ -18,6 +18,9 @@ rmdir "$libdir" 2>/dev/null || true
 
 if command -v systemctl >/dev/null 2>&1; then
     systemctl --user daemon-reload
+    # The running bus keeps the removed activation file until it is reloaded.
+    systemctl --user reload dbus-broker.service 2>/dev/null ||
+        systemctl --user reload dbus.service 2>/dev/null || true
 fi
 
 echo "Ampere vendor HID battery daemon removed."
