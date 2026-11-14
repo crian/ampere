@@ -1,0 +1,11 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+
+.ampere-button { -natural-hpadding: 4px; -minimum-hpadding: 4px; }
+.ampere-panel-box { spacing: 8px; }
+.ampere-item { spacing: 1px; }
+.ampere-label { margin-left: 2px; }
+.ampere-tooltip { spacing: 10px; padding: 8px 10px; border-radius: 14px; background-color: rgba(36,36,36,0.97); border: 1px solid rgba(255,255,255,0.12); color: white; }
+.ampere-card { spacing: 12px; }
+.ampere-card-name { font-weight: bold; }
+.ampere-card-percent { font-size: 1.5em; font-weight: bold; }
+.ampere-card-sub { color: rgba(255,255,255,0.65); font-size: 0.9em; }

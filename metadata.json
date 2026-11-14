@@ -1,0 +1,8 @@
+{
+  "uuid": "ampere@crian",
+  "name": "Ampere",
+  "description": "Battery level of wireless mice and keyboards in the top bar. Reads UPower devices plus Lamzu, MCHOSE and ATK/Compx mice through an optional companion service.",
+  "shell-version": ["48", "49", "50", "51"],
+  "settings-schema": "org.gnome.shell.extensions.ampere",
+  "url": "https://github.com/crian/ampere"
+}

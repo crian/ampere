@@ -1,0 +1,378 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+import Clutter from 'gi://Clutter';
+import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
+import GObject from 'gi://GObject';
+import St from 'gi://St';
+
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
+import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
+
+import {ICONS, STATE, UPOWER, fetchDevices, isCancelled, isPeripheral, deviceKey, deviceName} from './utils.js';
+import {HID_BATTERY_BUS_NAME, HID_BATTERY_IFACE, HID_BATTERY_OBJECT_PATH, readHidBattery} from './hidbattery.js';
+
+const S = STATE;
+const POLL_SECONDS = 30;
+
+const stateText = state => {
+    switch (state) {
+    case S.CHARGING: return 'Charging';
+    case S.DISCHARGING: return 'Discharging';
+    case S.FULLY_CHARGED: return 'Fully charged';
+    default: return '';
+    }
+};
+
+const hexToRgb = hex => {
+    const m = /^#?([0-9a-f]{6})$/i.exec(hex ?? '');
+    if (!m)
+        return [1, 1, 1];
+    const n = parseInt(m[1], 16);
+    return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+};
+
+// Foreground color of the theme at this actor, i.e. what the other panel icons use.
+const themeColor = actor => {
+    try {
+        const c = actor.get_theme_node().get_foreground_color();
+        return [c.red / 255, c.green / 255, c.blue / 255, c.alpha / 255];
+    } catch (e) {
+        return [1, 1, 1, 1];
+    }
+};
+
+const roundRect = (cr, x, y, w, h, r) => {
+    r = Math.max(0, Math.min(r, w / 2, h / 2));
+    cr.newSubPath();
+    cr.arc(x + w - r, y + r, r, -Math.PI / 2, 0);
+    cr.arc(x + w - r, y + h - r, r, 0, Math.PI / 2);
+    cr.arc(x + r, y + h - r, r, Math.PI / 2, Math.PI);
+    cr.arc(x + r, y + r, r, Math.PI, 3 * Math.PI / 2);
+    cr.closePath();
+};
+
+const Indicator = GObject.registerClass(
+class AmpereIndicator extends PanelMenu.Button {
+    _init(settings) {
+        // dontCreateMenu = true: no popup menu, no input grab, no hover loops.
+        super._init(0.5, 'Ampere', true);
+        this._settings = settings;
+        this._mode = null;
+        this._hasItems = false;
+        this.add_style_class_name('ampere-button');
+
+        this._box = new St.BoxLayout({
+            style_class: 'ampere-panel-box',
+            y_align: Clutter.ActorAlign.CENTER,
+            reactive: true,
+            track_hover: true,
+        });
+
+        // Plain actor on the UI layer: shown on hover, hidden on leave.
+        this._tooltip = new St.BoxLayout({
+            style_class: 'ampere-tooltip',
+            orientation: Clutter.Orientation.VERTICAL,
+            reactive: false,
+            visible: false,
+        });
+        Main.layoutManager.uiGroup.add_child(this._tooltip);
+
+        this._box.connect('notify::hover', () => {
+            if (this._box.hover)
+                this._showTooltip();
+            else
+                this._tooltip.hide();
+        });
+
+        this._place();
+    }
+
+    // Own button next to the quick settings, or inside the quick settings icon row.
+    _place() {
+        const mode = this._settings.get_string('placement');
+        const qsBox = Main.panel.statusArea.quickSettings?._indicators;
+        const wanted = mode === 'quick-settings' && qsBox ? 'quick-settings' : 'separate';
+        if (wanted !== this._mode) {
+            this._box.get_parent()?.remove_child(this._box);
+            if (wanted === 'quick-settings')
+                qsBox.insert_child_at_index(this._box, 0);
+            else
+                this.add_child(this._box);
+            this._mode = wanted;
+        }
+        this._box.visible = this._hasItems;
+        this.visible = wanted === 'separate' && this._hasItems;
+    }
+
+    _showTooltip() {
+        if (!this._settings.get_boolean('hover-card') || !this._tooltip.get_n_children())
+            return;
+        this._tooltip.show();
+        const [bx] = this._box.get_transformed_position();
+        const [bw] = this._box.get_size();
+        const [, tw] = this._tooltip.get_preferred_width(-1);
+        const monitor = Main.layoutManager.findMonitorForActor(this._box) ?? Main.layoutManager.primaryMonitor;
+        let x = Math.round(bx + bw / 2 - tw / 2);
+        x = Math.max(monitor.x + 4, Math.min(x, monitor.x + monitor.width - tw - 4));
+        // Anchor below the panel (not below the small box), so the card sits where it did before.
+        const [, py] = Main.panel.get_transformed_position();
+        this._tooltip.set_position(x, Math.round(py + Main.panel.height + 4));
+    }
+
+    // null = monochrome (use the theme color like the other icons)
+    _levelColor(item) {
+        const s = this._settings;
+        if (!s.get_boolean('colored-bar'))
+            return null;
+        if (item.state === S.CHARGING)
+            return hexToRgb(s.get_string('color-charging'));
+        if (item.pct <= s.get_int('threshold-low'))
+            return hexToRgb(s.get_string('color-low'));
+        if (item.pct <= s.get_int('threshold-medium'))
+            return hexToRgb(s.get_string('color-medium'));
+        return hexToRgb(s.get_string('color-high'));
+    }
+
+    _makeBar(item) {
+        const area = new St.DrawingArea({width: 5, height: 14, y_align: Clutter.ActorAlign.CENTER});
+        area.connect('style-changed', () => area.queue_repaint());
+        area.connect('repaint', () => {
+            const cr = area.get_context();
+            const [w, h] = area.get_surface_size();
+            const fg = themeColor(area);
+            const fill = this._levelColor(item) ?? fg;
+            cr.setLineWidth(1);
+            cr.setSourceRGBA(fg[0], fg[1], fg[2], 0.75 * fg[3]);
+            roundRect(cr, 0.5, 0.5, w - 1, h - 1, 2);
+            cr.stroke();
+            const inner = h - 2;
+            const fh = Math.round(inner * Math.max(0, Math.min(100, item.pct)) / 100);
+            if (fh > 0) {
+                cr.setSourceRGBA(fill[0], fill[1], fill[2], 1);
+                roundRect(cr, 1, 1 + inner - fh, w - 2, fh, 1);
+                cr.fill();
+            }
+            cr.$dispose();
+        });
+        return area;
+    }
+
+    _makeRing(item) {
+        const ring = new St.DrawingArea({width: 44, height: 44});
+        ring.connect('repaint', area => {
+            const cr = area.get_context();
+            const [w, h] = area.get_surface_size();
+            const r = Math.min(w, h) / 2 - 4;
+            const start = -Math.PI / 2;
+            const fg = themeColor(area);
+            cr.setLineWidth(4);
+            cr.setSourceRGBA(fg[0], fg[1], fg[2], 0.15);
+            cr.arc(w / 2, h / 2, r, 0, 2 * Math.PI);
+            cr.stroke();
+            if (item.pct > 0) {
+                const c = this._levelColor(item) ?? fg;
+                cr.setSourceRGBA(c[0], c[1], c[2], 1);
+                cr.setLineCap(1); // ROUND
+                cr.arc(w / 2, h / 2, r, start, start + 2 * Math.PI * item.pct / 100);
+                cr.stroke();
+            }
+            cr.$dispose();
+        });
+        return ring;
+    }
+
+    update(items) {
+        this._hasItems = items.length > 0;
+        this._place();
+        this._box.destroy_all_children();
+        this._tooltip.destroy_all_children();
+        if (!items.length) {
+            this._tooltip.hide();
+            return;
+        }
+
+        const s = this._settings;
+        for (const item of items) {
+            // Panel: icon | vertical bar | percentage (1 px apart, via CSS)
+            const row = new St.BoxLayout({style_class: 'ampere-item', y_align: Clutter.ActorAlign.CENTER});
+            if (s.get_boolean('show-icon'))
+                row.add_child(new St.Icon({icon_name: item.icon, icon_size: 16, y_align: Clutter.ActorAlign.CENTER}));
+            if (s.get_boolean('show-bar'))
+                row.add_child(this._makeBar(item));
+            if (s.get_boolean('show-percentage'))
+                row.add_child(new St.Label({text: `${item.pct}%`, style_class: 'ampere-label', y_align: Clutter.ActorAlign.CENTER}));
+            this._box.add_child(row);
+
+            // Hover card: ring | name, percentage, state
+            const card = new St.BoxLayout({style_class: 'ampere-card', y_align: Clutter.ActorAlign.CENTER});
+            card.add_child(this._makeRing(item));
+            const text = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, y_align: Clutter.ActorAlign.CENTER});
+            text.add_child(new St.Label({text: item.name, style_class: 'ampere-card-name'}));
+            text.add_child(new St.Label({text: `${item.pct}%`, style_class: 'ampere-card-percent'}));
+            const sub = stateText(item.state);
+            if (sub)
+                text.add_child(new St.Label({text: sub, style_class: 'ampere-card-sub'}));
+            card.add_child(text);
+            this._tooltip.add_child(card);
+        }
+
+        if (this._box.hover)
+            this._showTooltip();
+    }
+
+    destroy() {
+        this._tooltip?.destroy();
+        this._tooltip = null;
+        this._box?.destroy();
+        this._box = null;
+        super.destroy();
+    }
+});
+
+export default class AmpereExtension extends Extension {
+    enable() {
+        this._settings = this.getSettings();
+        this._cancellable = new Gio.Cancellable();
+        this._items = [];
+        this._vendorItems = [];
+        this._lastSignature = null;
+        this._polling = false;
+        this._again = false;
+
+        this._indicator = new Indicator(this._settings);
+        Main.panel.addToStatusArea(this.uuid, this._indicator, 0, 'right');
+        this._settingsId = this._settings.connect('changed', (_settings, key) => {
+            if (key === 'vendor-hid-enabled') {
+                this._lastSignature = null;
+                this._poll();
+            } else {
+                this._render(true);
+            }
+        });
+
+        // The companion service emits Changed when a value differs.
+        this._vendorSignalId = Gio.DBus.session.signal_subscribe(
+            HID_BATTERY_BUS_NAME, HID_BATTERY_IFACE, 'Changed', HID_BATTERY_OBJECT_PATH, null,
+            Gio.DBusSignalFlags.NONE, () => this._onVendorHidChanged());
+
+        // UPower over D-Bus, asynchronous so the shell never blocks.
+        const bus = Gio.DBus.system;
+        const onChange = () => this._poll();
+        this._subIds = ['DeviceAdded', 'DeviceRemoved'].map(name =>
+            bus.signal_subscribe(UPOWER.BUS, UPOWER.BUS, name, UPOWER.ROOT, null,
+                Gio.DBusSignalFlags.NONE, onChange));
+
+        this._poll();
+        this._timerId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, POLL_SECONDS, () => {
+            this._poll();
+            return GLib.SOURCE_CONTINUE;
+        });
+    }
+
+    async _poll() {
+        if (this._polling) {
+            this._again = true;
+            return;
+        }
+        this._polling = true;
+        try {
+            const devices = await fetchDevices(this._cancellable);
+            if (!this._indicator)
+                return;
+            this._items = this._collect(devices);
+            await this._pollVendorHid();
+            this._render(false);
+        } catch (e) {
+            if (!isCancelled(e))
+                console.error(`[ampere] refresh failed: ${e}`);
+        } finally {
+            this._polling = false;
+            if (this._again && this._indicator) {
+                this._again = false;
+                this._poll();
+            }
+        }
+    }
+
+    // Plain-data snapshot; same physical device (cable + receiver) is merged by key.
+    _collect(devices) {
+        const byKey = new Map();
+        for (const p of devices) {
+            if (!isPeripheral(p))
+                continue;
+            const item = {
+                key: deviceKey(p),
+                name: deviceName(p),
+                icon: ICONS.get(p.Type) ?? 'battery-symbolic',
+                pct: Math.round(p.Percentage ?? 0),
+                state: p.State ?? S.UNKNOWN,
+            };
+            const prev = byKey.get(item.key);
+            if (!prev || (prev.state === S.UNKNOWN && item.state !== S.UNKNOWN))
+                byKey.set(item.key, item);
+        }
+        return [...byKey.values()];
+    }
+
+    // Vendor HID devices are not in UPower; the companion service provides them.
+    async _pollVendorHid() {
+        if (!this._indicator || !this._settings.get_boolean('vendor-hid-enabled')) {
+            this._vendorItems = [];
+            return;
+        }
+
+        try {
+            const {items} = await readHidBattery(this._cancellable);
+            if (!this._indicator)
+                return;
+            this._vendorItems = items;
+        } catch (e) {
+            if (!this._indicator)
+                return;
+            this._vendorItems = [];
+            if (!isCancelled(e))
+                console.error(`[ampere] vendor HID service query failed: ${e}`);
+        }
+    }
+
+    async _onVendorHidChanged() {
+        await this._pollVendorHid();
+        this._render(false);
+    }
+
+    _render(force) {
+        if (!this._indicator)
+            return;
+        const hidden = this._settings.get_strv('hidden-devices');
+        const items = [...this._items, ...this._vendorItems].filter(i => !hidden.includes(i.key));
+        const signature = JSON.stringify(items);
+        if (!force && signature === this._lastSignature)
+            return;
+        this._lastSignature = signature;
+        this._indicator.update(items);
+    }
+
+    disable() {
+        this._cancellable?.cancel();
+        this._cancellable = null;
+        if (this._vendorSignalId) {
+            Gio.DBus.session.signal_unsubscribe(this._vendorSignalId);
+            this._vendorSignalId = 0;
+        }
+        if (this._timerId) {
+            GLib.source_remove(this._timerId);
+            this._timerId = 0;
+        }
+        for (const id of this._subIds ?? [])
+            Gio.DBus.system.signal_unsubscribe(id);
+        this._subIds = null;
+        this._settings?.disconnect(this._settingsId);
+        this._settings = null;
+        this._indicator?.destroy();
+        this._indicator = null;
+        this._items = null;
+        this._vendorItems = null;
+    }
+}

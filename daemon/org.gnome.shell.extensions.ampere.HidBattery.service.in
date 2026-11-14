@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+[D-BUS Service]
+Name=org.gnome.shell.extensions.ampere.HidBattery
+Exec=@PYTHON@ @LIBDIR@/ampere-hid
+SystemdService=ampere-hid.service

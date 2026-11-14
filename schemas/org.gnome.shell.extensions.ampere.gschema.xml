@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-2.0-or-later -->
+<schemalist>
+  <schema id="org.gnome.shell.extensions.ampere" path="/org/gnome/shell/extensions/ampere/">
+    <key name="show-icon" type="b"><default>true</default><summary>Show device icon in the panel</summary></key>
+    <key name="show-bar" type="b"><default>true</default><summary>Show vertical battery bar in the panel</summary></key>
+    <key name="show-percentage" type="b"><default>true</default><summary>Show percentage in the panel</summary></key>
+    <key name="colored-bar" type="b"><default>true</default><summary>Color the bar and ring by charge level (off = like the other panel icons)</summary></key>
+    <key name="hover-card" type="b"><default>true</default><summary>Show the info card on hover</summary></key>
+    <key name="placement" type="s"><default>'separate'</default><summary>'separate' (own button next to quick settings) or 'quick-settings' (inside the quick settings icons)</summary></key>
+    <key name="color-high" type="s"><default>'#2ec27e'</default><summary>Color for a high charge level (Adwaita success, green 4)</summary></key>
+    <key name="color-medium" type="s"><default>'#e5a50a'</default><summary>Color for a medium charge level (Adwaita warning, yellow 5)</summary></key>
+    <key name="color-low" type="s"><default>'#e01b24'</default><summary>Color for a low charge level (Adwaita error, red 3)</summary></key>
+    <key name="color-charging" type="s"><default>'#3584e4'</default><summary>Color while charging (Adwaita accent, blue 3)</summary></key>
+    <key name="threshold-medium" type="i"><default>30</default><summary>Up to this percentage the medium color is used</summary></key>
+    <key name="threshold-low" type="i"><default>15</default><summary>Up to this percentage the low color is used</summary></key>
+    <key name="hidden-devices" type="as"><default>[]</default><summary>Devices that are not shown</summary></key>
+    <key name="vendor-hid-enabled" type="b"><default>false</default><summary>Show battery of devices provided by the optional vendor HID companion service (not available in UPower)</summary></key>
+  </schema>
+</schemalist>

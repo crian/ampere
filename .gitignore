@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Build artifacts
+*.zip
+schemas/gschemas.compiled
+
+# Editors and temporary files
+*~
+*.swp
+
+# Unpacked copy of the built extension
+/ampere@crian.shell-extension/

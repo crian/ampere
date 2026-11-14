@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Vendor HID devices expose their battery through vendor reports. Grant the
+# logged-in user access to the hidraw nodes so the companion daemon can query
+# them without root.
+#
+# Add one line per supported device. Prefer exact VID/PID pairs over
+# vendor-wide rules: broad rules also grant access to keyboards and other HID
+# devices from the same vendor.
+#
+# Install:
+#   sudo install -m644 70-ampere-hid.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules
+#   sudo udevadm trigger --subsystem-match=hidraw
+
+# --- Lamzu / Compx (Maya X 8K, Inca, Paro, Champion, and the shared Compx
+#     Maya/Atlantis-family receivers 3554:f510 / f50f / f50d) ---
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3554", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="373e", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="37b0", MODE="0660", TAG+="uaccess"
+
+# --- Compx / Nordic receivers (ATK, VXE, VGN, Zaopin, Scyrox, Dareu, ...) ---
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="373b", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="260d", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="33e4", MODE="0660", TAG+="uaccess"
+
+# --- MCHOSE / RealTek (0x5253 = L7/M7 family, 0x3837 = A7 V2 / K7 and newer) ---
+# 0x3837 is a chip-vendor id that other brands share, so this is the one broad
+# rule here; it grants only the logged-in user access (TAG+="uaccess").
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="5253", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3837", MODE="0660", TAG+="uaccess"

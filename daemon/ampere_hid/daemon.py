@@ -1,0 +1,369 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+"""Ampere vendor HID battery daemon.
+
+Reads the battery of mice that UPower does not report and publishes it on the
+session bus:
+
+  Bus name:  org.gnome.shell.extensions.ampere.HidBattery
+  Object:    /org/gnome/shell/extensions/ampere/HidBattery
+  Interface: org.gnome.shell.extensions.ampere.HidBattery
+  Method:    GetDevices() -> s   JSON: {"devices": [...]}
+  Signal:    Changed()
+
+The extension never spawns this; D-Bus activation or the systemd user unit
+starts it on demand.
+
+Without D-Bus:
+
+  python3 -m ampere_hid --once       read the battery once
+  python3 -m ampere_hid --probe      list devices and their driver
+  python3 -m ampere_hid --diagnose   devices, driver and raw answers
+  python3 -m ampere_hid --sniff [s]  passively dump input reports
+"""
+
+import json
+import os
+import signal
+import sys
+import threading
+import time
+
+import gi
+
+gi.require_version("Gio", "2.0")
+from gi.repository import Gio, GLib  # noqa: E402
+
+try:
+    gi.require_version("GLibUnix", "2.0")
+    from gi.repository import GLibUnix  # noqa: E402
+except (ImportError, ValueError):
+    GLibUnix = None
+
+from .drivers import find_driver, matching_drivers  # noqa: E402
+from .hidraw import (  # noqa: E402
+    HidHandle,
+    can_access,
+    enumerate_nodes,
+    group_nodes,
+    log,
+    wait_for_activity,
+)
+
+BUS_NAME = "org.gnome.shell.extensions.ampere.HidBattery"
+OBJECT_PATH = "/org/gnome/shell/extensions/ampere/HidBattery"
+IFACE = "org.gnome.shell.extensions.ampere.HidBattery"
+POLL_SECONDS = 30
+# While a supported receiver is present but does not answer (the mouse is
+# asleep), the daemon waits for input reports instead of polling: a sleeping
+# mouse sends nothing, so this blocks without using CPU and returns the instant
+# the mouse is moved.
+ACTIVITY_WAIT_SECONDS = 25
+GRACE_POLLS = 3
+
+INTROSPECTION_XML = """
+<node>
+  <interface name="org.gnome.shell.extensions.ampere.HidBattery">
+    <method name="GetDevices">
+      <arg type="s" direction="out" name="devices"/>
+    </method>
+    <signal name="Changed"/>
+  </interface>
+</node>
+"""
+
+
+def read_devices():
+    """Return (matched devices, fresh battery items)."""
+    devices = group_nodes(enumerate_nodes())
+    matched = []
+    fresh = {}
+    for device in devices:
+        driver = find_driver(device)
+        if driver is None:
+            continue
+        matched.append(device)
+        battery = driver.read(device)
+        if not battery:
+            continue
+        level, state = battery
+        fresh[device.key] = {
+            "key": device.key,
+            "name": device.name,
+            "kind": driver.kind,
+            "pct": level,
+            "state": state,
+        }
+    return matched, fresh
+
+
+def query_all():
+    matched, fresh = read_devices()
+    return list(fresh.values()), len(matched)
+
+
+def probe():
+    """Describe all hidraw devices and their matching driver, without querying."""
+    devices = group_nodes(enumerate_nodes())
+    result = []
+    for device in devices:
+        driver = find_driver(device)
+        result.append(
+            {
+                "key": device.key,
+                "name": device.name,
+                "driver": driver.name if driver else None,
+                "kind": driver.kind if driver else None,
+                "nodes": [
+                    {
+                        "path": node.path,
+                        "vendor": f"{node.vendor:04x}",
+                        "product": f"{node.product:04x}",
+                        "interface": node.interface,
+                    }
+                    for node in device.nodes
+                ],
+            }
+        )
+    return result
+
+
+def sniff(seconds=3.0):
+    """Passively dump input reports from every accessible hidraw node.
+
+    Read-only: nothing is written to any device. Useful for devices that push
+    their status on their own.
+    """
+    result = []
+    for device in group_nodes(enumerate_nodes()):
+        for node in device.nodes:
+            reports = []
+            try:
+                with HidHandle(node.path) as hid:
+                    hid.flush()
+                    deadline = time.time() + seconds
+                    while time.time() < deadline:
+                        data = hid.read_input(timeout=0.2)
+                        if data:
+                            reports.append(data.hex(" "))
+            except OSError as e:
+                reports.append(f"error: {e}")
+            result.append(
+                {
+                    "name": device.name,
+                    "path": node.path,
+                    "interface": node.interface,
+                    "reports": reports,
+                }
+            )
+    return result
+
+
+def diagnose():
+    """Explain every hidraw device, its driver and the raw answers."""
+    result = []
+    for device in group_nodes(enumerate_nodes()):
+        drivers = matching_drivers(device)
+        entry = {
+            "key": device.key,
+            "name": device.name,
+            "nodes": [
+                {
+                    "path": node.path,
+                    "vendor": f"{node.vendor:04x}",
+                    "product": f"{node.product:04x}",
+                    "interface": node.interface,
+                    "accessible": os.access(node.path, os.R_OK | os.W_OK),
+                }
+                for node in device.nodes
+            ],
+            "drivers": [driver.name for driver in drivers],
+            "attempts": [],
+        }
+        for driver in drivers:
+            try:
+                battery = driver.read(device)
+            except Exception as e:  # a broken driver must not abort the report
+                battery = f"error: {e}"
+            entry["attempts"].append(
+                {
+                    "driver": driver.name,
+                    "result": list(battery) if isinstance(battery, tuple) else battery,
+                }
+            )
+        result.append(entry)
+    return result
+
+
+class Daemon:
+    """Serves cached readings over D-Bus. The sweep runs in a thread.
+
+    GetDevices must not wait for a device query. A sweep takes a few hundred
+    milliseconds with an awake mouse and several seconds with sleeping ones,
+    which delays the panel icon after login and can hit the caller's timeout.
+    """
+
+    def __init__(self, loop):
+        self._loop = loop
+        self._connection = None
+        self._payload = json.dumps({"devices": []}, separators=(",", ":"))
+        self._last = {}
+        self._misses = {}
+        self._polling = False
+        self._timer = 0
+
+    def _set_payload(self, items):
+        payload = json.dumps({"devices": items}, separators=(",", ":"))
+        if payload == self._payload:
+            return
+        self._payload = payload
+        if self._connection is not None:
+            self._connection.emit_signal(None, OBJECT_PATH, IFACE, "Changed", None)
+
+    def _schedule(self):
+        if self._timer:
+            GLib.source_remove(self._timer)
+        self._timer = GLib.timeout_add_seconds(POLL_SECONDS, self._on_timeout)
+
+    def _on_timeout(self):
+        self._timer = 0
+        self.request_poll()
+        return GLib.SOURCE_REMOVE
+
+    def request_poll(self):
+        """Start a sweep in the background, unless one is already running."""
+        if self._polling:
+            return
+        self._polling = True
+        threading.Thread(target=self._worker, daemon=True, name="ampere-hid-poll").start()
+
+    def _worker(self):
+        try:
+            matched, fresh = read_devices()
+            if matched and not fresh:
+                # The receiver answered nothing: the mouse is asleep. Wait for
+                # input instead of polling, then read again right away.
+                paths = [
+                    node.path
+                    for device in matched
+                    for node in device.nodes
+                    if can_access(node)
+                ]
+                if wait_for_activity(paths, ACTIVITY_WAIT_SECONDS):
+                    matched, fresh = read_devices()
+        except Exception as e:  # a broken driver must not kill the daemon
+            log(f"poll failed: {e}")
+            GLib.idle_add(self._apply_failed)
+            return
+        GLib.idle_add(self._apply, matched, fresh)
+
+    def _apply_failed(self):
+        self._polling = False
+        self._schedule()
+        return GLib.SOURCE_REMOVE
+
+    def _apply(self, matched, fresh):
+        """Main loop: grace period, payload update and next sweep."""
+        self._polling = False
+
+        items = []
+        for device in matched:
+            key = device.key
+            if key in fresh:
+                self._last[key] = fresh[key]
+                self._misses[key] = 0
+                items.append(fresh[key])
+            else:
+                misses = self._misses.get(key, 0) + 1
+                self._misses[key] = misses
+                if key in self._last and misses < GRACE_POLLS:
+                    items.append(self._last[key])
+                else:
+                    self._last.pop(key, None)
+
+        present = {device.key for device in matched}
+        for key in list(self._last):
+            if key not in present:
+                del self._last[key]
+                self._misses.pop(key, None)
+
+        self._set_payload(items)
+        self._schedule()
+        return GLib.SOURCE_REMOVE
+
+    def on_method_call(self, connection, sender, path, iface, method, params, invocation):
+        if method == "GetDevices":
+            invocation.return_value(GLib.Variant("(s)", (self._payload,)))
+            return
+        invocation.return_dbus_error(
+            "org.freedesktop.DBus.Error.UnknownMethod", f"Unknown method {method}"
+        )
+
+    def on_bus_acquired(self, connection, name):
+        node = Gio.DBusNodeInfo.new_for_xml(INTROSPECTION_XML)
+        connection.register_object(
+            OBJECT_PATH, node.interfaces[0], self.on_method_call, None, None
+        )
+        self._connection = connection
+        # Answer immediately from the (empty) cache; the first sweep follows.
+        self.request_poll()
+
+    def on_name_lost(self, connection, name):
+        log(f"could not own bus name {name}")
+        self._loop.quit()
+
+
+def quit_handler(loop):
+    def handler():
+        loop.quit()
+        return GLib.SOURCE_REMOVE
+    return handler
+
+
+def add_unix_signal(signum, handler):
+    if GLibUnix is not None:
+        return GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signum, handler)
+    return GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signum, handler)
+
+
+def main(argv):
+    if "--probe" in argv:
+        print(json.dumps({"devices": probe()}, indent=2))
+        return 0
+
+    if "--sniff" in argv:
+        seconds = 3.0
+        index = argv.index("--sniff")
+        if index + 1 < len(argv):
+            try:
+                seconds = float(argv[index + 1])
+            except ValueError:
+                pass
+        print(json.dumps({"nodes": sniff(seconds)}, indent=2))
+        return 0
+
+    if "--diagnose" in argv:
+        print(json.dumps({"devices": diagnose()}, indent=2))
+        return 0
+
+    if "--once" in argv:
+        items, matched = query_all()
+        print(json.dumps({"devices": items}, separators=(",", ":")))
+        if matched and not items:
+            log("supported device found, no battery answer (asleep?)")
+            return 1
+        return 0
+
+    loop = GLib.MainLoop()
+    daemon = Daemon(loop)
+    Gio.bus_own_name(
+        Gio.BusType.SESSION,
+        BUS_NAME,
+        Gio.BusNameOwnerFlags.NONE,
+        daemon.on_bus_acquired,
+        None,
+        daemon.on_name_lost,
+    )
+    for signum in (signal.SIGINT, signal.SIGTERM):
+        add_unix_signal(signum, quit_handler(loop))
+    loop.run()
+    return 0
