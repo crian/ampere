@@ -150,6 +150,12 @@ export default class AmperePrefs extends ExtensionPreferences {
         group.add(loading);
         page.add(group);
 
+        // The rows are rebuilt when the vendor switch changes, so enabling it
+        // fills the list without closing and reopening the window.
+        let rows = [];
+        let running = false;
+        let again = false;
+
         const fillDevices = async () => {
             const devices = new Map();
             try {
@@ -183,12 +189,19 @@ export default class AmperePrefs extends ExtensionPreferences {
                     devices.set(key, _('%s (not connected)').replace('%s', key));
             }
 
-            group.remove(loading);
+            if (loading.get_parent() === group)
+                group.remove(loading);
+            for (const row of rows)
+                group.remove(row);
+            rows = [];
+
             if (!devices.size) {
-                group.add(new Adw.ActionRow({
+                const empty = new Adw.ActionRow({
                     title: _('No devices found'),
                     subtitle: _('Check "upower -e"'),
-                }));
+                });
+                group.add(empty);
+                rows.push(empty);
                 return;
             }
 
@@ -203,9 +216,32 @@ export default class AmperePrefs extends ExtensionPreferences {
                     settings.set_strv('hidden-devices', [...list]);
                 });
                 group.add(row);
+                rows.push(row);
             }
         };
 
-        fillDevices().catch(e => console.error(`[ampere] cannot fill the device list: ${e}`));
+        const refreshDevices = async () => {
+            if (running) {
+                again = true;
+                return;
+            }
+            running = true;
+            try {
+                do {
+                    again = false;
+                    await fillDevices();
+                } while (again && alive);
+            } finally {
+                running = false;
+            }
+        };
+
+        const vendorSettingsId = settings.connect('changed::vendor-hid-enabled', () => {
+            refreshDevices().catch(e =>
+                console.error(`[ampere] cannot refresh the device list: ${e}`));
+        });
+        window.connect('destroy', () => settings.disconnect(vendorSettingsId));
+
+        refreshDevices().catch(e => console.error(`[ampere] cannot fill the device list: ${e}`));
     }
 }
