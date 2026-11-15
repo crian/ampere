@@ -34,6 +34,9 @@ UNIT_TEMPLATE = """\
 Description=Ampere vendor HID battery daemon
 
 [Service]
+# Type=simple on purpose: activation already waits for the bus name, and
+# Type=dbus would mark the unit failed when a second instance still holds it
+# right after login.
 Type=simple
 ExecStart={exec_start}
 Restart=on-failure
