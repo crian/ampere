@@ -34,6 +34,12 @@ VENDOR_IDS = {0x373B, 0x260D, 0x33E4}
 REPORT_ID = 0x08
 BATTERY_CMD = 0x04
 TIMEOUT = 0.3
+# A receiver with no mouse behind it answers nothing, and a full probe of all
+# three nodes costs about a second. After repeated misses the driver retries one
+# node with a short window and only looks properly every few sweeps.
+FAST_TIMEOUT = 0.12
+FAILURES_BEFORE_FAST = 2
+FULL_PROBE_EVERY = 5
 
 
 def checksum(data):
@@ -70,7 +76,7 @@ def parse_battery_response(resp):
     return level, state
 
 
-def read_node(node):
+def read_node(node, timeout=TIMEOUT, feature=True):
     """Query the battery over the Compx transport, or return ``None``."""
     with HidHandle(node.path) as hid:
         hid.flush()
@@ -78,13 +84,15 @@ def read_node(node):
         if not hid.send(build_battery_packet()):
             return None
 
-        deadline = time.time() + TIMEOUT
+        deadline = time.time() + timeout
         while time.time() < deadline:
             parsed = parse_battery_response(hid.read_input(timeout=0.05))
             if parsed:
                 return parsed
             time.sleep(0.01)
 
+        if not feature:
+            return None
         return parse_battery_response(hid.read_feature(17, REPORT_ID))
 
 
@@ -94,15 +102,40 @@ class CompxDriver(Driver):
     vids = frozenset(VENDOR_IDS)
     preferred_interfaces = (2, 1, 0)
 
+    def __init__(self):
+        # Remember the node that answered and how many sweeps in a row failed,
+        # so a receiver without a mouse does not cost a full probe every time.
+        self._node = {}
+        self._failures = {}
+
     def read(self, device):
-        for node in device.sorted_nodes(self.preferred_interfaces):
+        key = device.key
+        failures = self._failures.get(key, 0)
+        quick = failures >= FAILURES_BEFORE_FAST and failures % FULL_PROBE_EVERY
+
+        nodes = device.sorted_nodes(self.preferred_interfaces)
+        known = self._node.get(key)
+        if known:
+            nodes.sort(key=lambda node: node.path != known)
+        if quick:
+            nodes = nodes[:1]
+
+        for node in nodes:
             if not can_access(node):
                 warn_permission(
                     node.path,
                     "run `ampere-hid install --udev`",
                 )
                 continue
-            battery = read_node(node)
+            battery = read_node(
+                node,
+                timeout=FAST_TIMEOUT if quick else TIMEOUT,
+                feature=not quick,
+            )
             if battery:
+                self._node[key] = node.path
+                self._failures[key] = 0
                 return battery
+
+        self._failures[key] = failures + 1
         return None

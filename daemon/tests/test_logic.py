@@ -9,11 +9,12 @@ import pathlib
 import socket
 import sys
 import unittest
+from unittest import mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from ampere_hid import grace, uevent  # noqa: E402
-from ampere_hid.drivers import find_driver, matching_drivers  # noqa: E402
+from ampere_hid.drivers import compx, find_driver, matching_drivers  # noqa: E402
 from ampere_hid.hidraw import HidDevice, HidNode  # noqa: E402
 
 
@@ -50,6 +51,86 @@ class DriverSelectionTests(unittest.TestCase):
         # both transports itself, so the plain Compx driver must not compete.
         device = make_device(0x3554, 0xF50D)
         self.assertEqual([driver.name for driver in matching_drivers(device)], ["Lamzu"])
+
+
+class CompxBackoffTests(unittest.TestCase):
+    """A receiver without a mouse must not cost a full probe every sweep."""
+
+    def setUp(self):
+        self.device = HidDevice("compx-test", "test device")
+        for interface in (0, 1, 2):
+            self.device.add_node(
+                HidNode(
+                    f"/dev/hidraw-test{interface}",
+                    0x373B,
+                    0x11FE,
+                    "test device",
+                    "",
+                    interface,
+                )
+            )
+        self.driver = compx.CompxDriver()
+        self.calls = []
+        self.result = None
+
+    def read_node(self, node, timeout=compx.TIMEOUT, feature=True):
+        self.calls.append((node.path, timeout, feature))
+        return self.result
+
+    def patch(self):
+        return mock.patch.multiple(
+            compx,
+            can_access=mock.Mock(return_value=True),
+            read_node=mock.Mock(side_effect=self.read_node),
+        )
+
+    def test_two_full_sweeps_then_a_cheap_one(self):
+        with self.patch():
+            for _ in range(compx.FAILURES_BEFORE_FAST):
+                self.assertIsNone(self.driver.read(self.device))
+            self.assertEqual(len(self.calls), 6)
+            self.calls.clear()
+            self.assertIsNone(self.driver.read(self.device))
+        self.assertEqual(len(self.calls), 1)
+        self.assertEqual(self.calls[0][1], compx.FAST_TIMEOUT)
+        self.assertFalse(self.calls[0][2])
+
+    def test_a_full_probe_comes_back(self):
+        with self.patch():
+            for _ in range(compx.FULL_PROBE_EVERY):
+                self.driver.read(self.device)
+            self.calls.clear()
+            self.driver.read(self.device)
+        self.assertEqual(len(self.calls), 3)
+        self.assertTrue(all(call[1] == compx.TIMEOUT for call in self.calls))
+
+    def test_remembers_the_node_that_answered(self):
+        def answer_on_one(node, timeout=compx.TIMEOUT, feature=True):
+            self.calls.append((node.path, timeout, feature))
+            return (50, 0) if node.path.endswith("1") else None
+
+        with self.patch(), mock.patch.object(compx, "read_node", answer_on_one):
+            self.assertEqual(self.driver.read(self.device), (50, 0))
+            self.assertEqual([call[0] for call in self.calls][:2],
+                             ["/dev/hidraw-test0", "/dev/hidraw-test1"])
+            self.calls.clear()
+            self.assertEqual(self.driver.read(self.device), (50, 0))
+        self.assertEqual([call[0] for call in self.calls], ["/dev/hidraw-test1"])
+
+    def test_a_reading_resets_the_failures(self):
+        with self.patch():
+            for _ in range(compx.FAILURES_BEFORE_FAST):
+                self.driver.read(self.device)
+            self.result = (50, 0)
+            self.calls.clear()
+            self.assertEqual(self.driver.read(self.device), (50, 0))
+            self.assertEqual(len(self.calls), 1)
+            self.assertFalse(self.calls[0][2])  # still the cheap probe
+
+            self.result = None
+            self.calls.clear()
+            self.driver.read(self.device)
+        self.assertEqual(len(self.calls), 3)  # failures were reset
 
 
 class DeviceKeyTests(unittest.TestCase):
