@@ -118,6 +118,7 @@ class Daemon:
     def _on_timeout(self):
         if IDLE_EXIT_SECONDS and time.monotonic() - self._last_call > IDLE_EXIT_SECONDS:
             log(f"no request for {IDLE_EXIT_SECONDS}s, exiting")
+            self._timer = 0  # this source is being removed
             self._loop.quit()
             return GLib.SOURCE_REMOVE
         self.request_poll()
@@ -263,6 +264,18 @@ class Daemon:
         log(f"could not own bus name {name}")
         self._loop.quit()
 
+    def close(self):
+        if self._timer:
+            GLib.source_remove(self._timer)
+            self._timer = 0
+        if self._retry_id:
+            GLib.source_remove(self._retry_id)
+            self._retry_id = 0
+        if self._monitor is not None:
+            with contextlib.suppress(OSError):
+                self._monitor.close()
+            self._monitor = None
+
 
 def quit_handler(loop):
     def handler():
@@ -294,5 +307,8 @@ def run():
     )
     for signum in (signal.SIGINT, signal.SIGTERM):
         add_unix_signal(signum, quit_handler(loop))
-    loop.run()
+    try:
+        loop.run()
+    finally:
+        daemon.close()
     return 0
