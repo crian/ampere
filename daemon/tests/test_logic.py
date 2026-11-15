@@ -239,6 +239,17 @@ class GraceTests(unittest.TestCase):
         self.assertEqual(self.apply(["a"], {"a": {"pct": 50}}), [{"pct": 50}])
         self.assertEqual(self.misses["a"], 0)
 
+    def test_peek_shows_fresh_and_remembered_readings_without_counting(self):
+        self.apply(["a", "b"], {"a": {"pct": 80}, "b": {"pct": 50}})
+        last, misses = dict(self.last), dict(self.misses)
+        items = grace.peek(["a", "b", "c"], {"a": {"pct": 79}}, self.last)
+        self.assertEqual(items, [{"pct": 79}, {"pct": 50}])  # c was never seen
+        self.assertEqual((self.last, self.misses), (last, misses))
+
+    def test_peek_leaves_out_devices_that_are_gone(self):
+        self.apply(["a"], {"a": {"pct": 80}})
+        self.assertEqual(grace.peek([], {}, self.last), [])
+
     def test_last_value_is_kept_for_the_grace_period(self):
         self.apply(["a"], {"a": {"pct": 50}})
         for miss in (1, 2):

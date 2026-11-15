@@ -34,3 +34,20 @@ def apply(matched_keys, fresh, last, misses, grace_polls):
             misses.pop(key, None)
 
     return items
+
+
+def peek(matched_keys, fresh, last):
+    """Return what would be shown right now, without counting any misses.
+
+    A device that gave a reading is shown with it; a device that stays silent
+    keeps its last reading. Used to publish a sweep's result before the sweep
+    waits for a sleeping mouse, so the other devices do not wait along.
+    ``apply`` still runs once at the end of the sweep and does the counting.
+    """
+    items = []
+    for key in matched_keys:
+        if key in fresh:
+            items.append(fresh[key])
+        elif key in last:
+            items.append(last[key])
+    return items

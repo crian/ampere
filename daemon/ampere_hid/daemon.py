@@ -156,15 +156,22 @@ class Daemon:
             # off. Wait for its input instead of polling; the first report after
             # waking ends the wait.
             paths = silent_paths(matched, fresh)
-            if paths and wait_for_activity(
-                paths, ACTIVITY_WAIT_SECONDS, self._wake_r
-            ):
-                matched, fresh = read_devices()
+            if paths:
+                # Do not hold back the devices that did answer: show them now.
+                GLib.idle_add(self._publish_partial, matched, fresh)
+                if wait_for_activity(paths, ACTIVITY_WAIT_SECONDS, self._wake_r):
+                    matched, fresh = read_devices()
         except Exception as e:  # a broken driver must not kill the daemon
             log(f"poll failed: {e}")
             GLib.idle_add(self._apply_failed)
             return
         GLib.idle_add(self._apply, matched, fresh)
+
+    def _publish_partial(self, matched, fresh):
+        """Main loop: show a sweep's result before it waits for a silent device."""
+        keys = [device.key for device in matched]
+        self._set_payload(grace.peek(keys, fresh, self._last))
+        return GLib.SOURCE_REMOVE
 
     def _apply_failed(self):
         self._polling = False
