@@ -177,6 +177,7 @@ export default class AmperePrefs extends ExtensionPreferences {
         // The rows are rebuilt when the vendor switch changes, so enabling it
         // fills the list without closing and reopening the window.
         let rows = [];
+        let signature = null;
         let running = false;
         let again = false;
 
@@ -214,6 +215,14 @@ export default class AmperePrefs extends ExtensionPreferences {
                 if (!devices.has(key))
                     devices.set(key, _('%s (not connected)').replace('%s', key));
             }
+
+            // A Changed on every new percentage would otherwise rebuild the
+            // rows while the user is clicking in them.
+            const current = [...devices].map(([key, name]) => `${key}\t${name}`).join('\n') +
+                `\n--\n${[...hidden].join('\n')}`;
+            if (current === signature && rows.length)
+                return;
+            signature = current;
 
             if (loading.get_parent() === group)
                 group.remove(loading);
