@@ -227,6 +227,7 @@ class ProgramTests(unittest.TestCase):
         self.assertEqual(out.getvalue(), udev.render_rules())
 
 
+@unittest.skipIf(install.pygobject_missing(), "PyGObject not available")
 class InstallFromProgramTests(unittest.TestCase):
     """The user path: run the built file and let it install itself."""
 
