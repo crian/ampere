@@ -371,7 +371,11 @@ export default class AmpereExtension extends Extension {
     }
 
     async _onVendorHidChanged() {
+        if (!this._indicator)
+            return;
         await this._pollVendorHid();
+        if (!this._indicator)
+            return;
         this._render(false);
     }
 
@@ -401,7 +405,9 @@ export default class AmpereExtension extends Extension {
         for (const id of this._subIds ?? [])
             Gio.DBus.system.signal_unsubscribe(id);
         this._subIds = null;
-        this._settings?.disconnect(this._settingsId);
+        if (this._settings && this._settingsId)
+            this._settings.disconnect(this._settingsId);
+        this._settingsId = 0;
         this._settings = null;
         this._indicator?.destroy();
         this._indicator = null;
