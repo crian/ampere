@@ -13,7 +13,7 @@ from unittest import mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from ampere_hid import grace, sweep, uevent  # noqa: E402
+from ampere_hid import grace, status, sweep, uevent  # noqa: E402
 from ampere_hid.drivers import compx, find_driver, lamzu, matching_drivers  # noqa: E402
 from ampere_hid.hidraw import HidDevice, HidNode, access_help  # noqa: E402
 
@@ -219,6 +219,36 @@ class AccessHelpTests(unittest.TestCase):
         reason, hint = access_help(node)
         self.assertIn("373b:1271 is not in the udev table", reason)
         self.assertIn("udev.py", hint)
+
+
+class StatusRenderTests(unittest.TestCase):
+    def render(self, **kwargs):
+        values = {
+            "version": "1.1",
+            "program": "/home/u/.local/bin/ampere-hid",
+            "service": "active (running)",
+            "rule": "current",
+            "rule_path": "/etc/udev/rules.d/70-ampere-hid.rules",
+            "devices": [],
+        }
+        values.update(kwargs)
+        return status.render(**values)
+
+    def test_lists_devices_with_their_state(self):
+        text = self.render(devices=[{"name": "Maya X", "pct": 100, "state": 0}])
+        self.assertIn("service     active (running)", text)
+        self.assertIn("udev rule   current", text)
+        self.assertIn("Maya X", text)
+        self.assertIn("100 %  discharging", text)
+
+    def test_says_when_there_is_nothing_to_show(self):
+        self.assertIn("devices     none", self.render())
+        self.assertIn("devices     not available", self.render(devices=None))
+
+    def test_names_a_missing_pygobject(self):
+        self.assertIn(
+            "not available (PyGObject missing)", self.render(service=None)
+        )
 
 
 class DeviceKeyTests(unittest.TestCase):

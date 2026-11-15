@@ -111,6 +111,13 @@ to be added (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 ### If a device does not show up
 
 ```sh
+ampere-hid status
+```
+
+This shows the version, whether the service runs, whether the udev rule matches
+this version and what the service currently sees. For the raw answers, run:
+
+```sh
 ampere-hid diagnose
 ```
 

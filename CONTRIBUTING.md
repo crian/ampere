@@ -15,11 +15,12 @@ schemas/            GSettings schema (the compiled file is generated)
 
 daemon/
   ampere_hid/       the package; released as the single file `ampere-hid`
-    cli.py          subcommands: run, once, probe, diagnose, sniff, rules, ...
+    cli.py          subcommands: run, status, once, probe, diagnose, ...
     daemon.py       D-Bus service, cache, scheduling (the only part needing gi)
     sweep.py        one pass over all devices
     hidraw.py       device enumeration, HID report helpers
     tools.py        probe, sniff, diagnose (no gi needed)
+    status.py       one-screen summary: version, unit, rule, devices
     install.py      install/uninstall: program, systemd unit, D-Bus file, udev
     udev.py         product IDs that get hidraw access; renders the rule
     archive.py      builds the single-file program (a zipapp)

@@ -6,7 +6,7 @@ import json
 import os
 import sys
 
-from . import __version__, tools
+from . import __version__, status, tools
 from . import install as installer
 from .archive import build_bytes
 from .hidraw import log
@@ -34,6 +34,11 @@ def cmd_once(args):
 
 def cmd_probe(args):
     print(json.dumps({"devices": tools.probe()}, indent=2))
+    return 0
+
+
+def cmd_status(args):
+    print(status.status_text())
     return 0
 
 
@@ -85,6 +90,7 @@ def build_parser():
 
     add("run", cmd_run, "run the D-Bus service (what systemd starts)")
     add("once", cmd_once, "read the battery once and print it as JSON")
+    add("status", cmd_status, "show version, service, rule and devices")
     add("probe", cmd_probe, "list hidraw devices and their driver, no queries")
     add("diagnose", cmd_diagnose, "query the battery and print the raw answers")
     p = add("sniff", cmd_sniff, "passively dump input reports, no queries")
