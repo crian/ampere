@@ -210,7 +210,7 @@ def install_rules(rules_path, run, interactive):
         cmd = prefix + ["sh", "-c", INSTALL_RULES_SCRIPT, "sh", tmp, str(rules_path)]
         return run(cmd) == 0
     finally:
-        Path(tmp).unlink()
+        Path(tmp).unlink(missing_ok=True)
 
 
 def remove_rules(rules_path, run, interactive):
