@@ -36,6 +36,9 @@ jobs:
             exit 1
           fi
 
+      - name: Pack the companion service
+        run: tar -czf ampere-hid.tar.gz daemon
+
       - name: Extract notes from the changelog
         run: |
           version="${GITHUB_REF_NAME#v}"
@@ -52,6 +55,7 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" \
             ./ampere@crian.shell-extension.zip \
+            ./ampere-hid.tar.gz \
             --verify-tag \
             --title "$GITHUB_REF_NAME" \
             --notes-file notes.md
