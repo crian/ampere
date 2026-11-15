@@ -1,17 +1,12 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Keep the last reading of a device that stopped answering.
-
-A sleeping mouse answers nothing, so its panel entry would vanish right away.
-It is kept for a few polls instead.
-"""
+"""Keep the last reading of a device that stopped answering, for a few polls."""
 
 
 def apply(matched_keys, fresh, last, misses, grace_polls):
     """Return the items to publish.
 
-    ``matched_keys`` are the keys of the devices that are physically present,
-    ``fresh`` maps keys to a current reading. ``last`` and ``misses`` carry
-    state between calls and are updated in place.
+    ``matched_keys`` are the present devices, ``fresh`` maps keys to readings.
+    ``last`` and ``misses`` carry state and are updated in place.
     """
     items = []
     for key in matched_keys:
@@ -37,12 +32,9 @@ def apply(matched_keys, fresh, last, misses, grace_polls):
 
 
 def peek(matched_keys, fresh, last):
-    """Return what would be shown right now, without counting any misses.
+    """What apply would show right now, without counting a miss.
 
-    A device that gave a reading is shown with it; a device that stays silent
-    keeps its last reading. Used to publish a sweep's result before the sweep
-    waits for a sleeping mouse, so the other devices do not wait along.
-    ``apply`` still runs once at the end of the sweep and does the counting.
+    Used to publish a sweep before it waits for a silent device.
     """
     items = []
     for key in matched_keys:

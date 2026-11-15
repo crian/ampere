@@ -173,14 +173,10 @@ def can_access(node):
 
 
 def wait_for_activity(paths, timeout, wake_fd=None):
-    """Block until one of the hidraw nodes reports input, or the timeout expires.
+    """Block until a node reports input or the timeout expires.
 
-    A sleeping mouse sends nothing, so this uses no CPU while idle and returns
-    as soon as the mouse moves, which is when a reading becomes possible again.
-
-    ``wake_fd`` is the read end of a pipe: when it becomes readable the wait
-    ends early with ``True``, so the caller can react to something else, such as
-    a newly plugged-in device, without waiting out the timeout.
+    A sleeping mouse sends nothing, so this uses no CPU. ``wake_fd`` ends the
+    wait early with ``True`` when it becomes readable.
     """
     fds = []
     try:

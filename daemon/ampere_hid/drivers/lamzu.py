@@ -1,13 +1,11 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Lamzu wireless receivers: Maya X 8K, Inca, Paro, Maya Champion, ...
 
-``3554`` receivers use the Compx protocol (report ID 8); ``373e`` and ``37b0``
-use Aurora (65-byte feature report, ID 0). The split is not reliable, so this
-driver claims all three VIDs and tries both transports, remembering whichever
-answered last.
+3554 receivers use Compx (report 8); 373e and 37b0 use Aurora (65-byte feature
+report, ID 0). The split is unreliable, so all three VIDs are claimed and both
+transports are tried.
 
-Tested with a Maya X 8K (``373e:001e``, Aurora) and a Thorn receiver
-(``3554:f50d``, Compx). Layout reference: github.com/anany1702/lamzu-ctl
+Tested with a Maya X 8K (373e:001e) and a Thorn receiver (3554:f50d).
 """
 
 import time
@@ -20,12 +18,10 @@ VENDOR_IDS = {0x3554, 0x373E, 0x37B0}
 
 COMPX = "compx"
 AURORA = "aurora"
-# First byte of the new protocol's answer: reachable, or not.
 AURORA_ONLINE = 0xA1
 AURORA_OFFLINE = 0xA0
-# A receiver without a mouse answers nothing, and a full probe of both
-# transports on every node costs a couple of seconds. After repeated misses the
-# driver retries with shorter windows and looks properly again every few sweeps.
+# A silent receiver costs ~2 s per sweep; retry with shorter windows after
+# misses and probe fully again every fifth sweep.
 FAST_TIMEOUT = 0.12
 FAST_REPEATS = 2
 FAILURES_BEFORE_FAST = 2
@@ -78,11 +74,10 @@ def parse_aurora_battery_response(resp):
 
 
 def aurora_query(node, repeats=6):
-    """Ask with the new protocol and return its first frame, or ``None``.
+    """Ask with the new protocol; return its frame or ``None``.
 
-    The first byte tells whether the mouse is reachable: ``0xA1`` means yes and
-    carries the reading, ``0xA0`` means the receiver has no link. The legacy
-    query answers in both cases with the value it saw last, so it cannot tell.
+    ``0xA1`` means the mouse is reachable and carries the reading, ``0xA0`` no
+    link. The legacy answer repeats the last value either way.
     """
     packet = build_aurora_battery_packet(True)
     try:
@@ -105,15 +100,11 @@ def aurora_query(node, repeats=6):
 
 
 def aurora_read_node(node, trust_offline=False, quick=False):
-    """Query the battery over the Aurora transport.
+    """Query the battery over Aurora; return ``(reading, online)``.
 
-    Returns ``(reading, online)``. ``online`` is true when the new protocol
-    answered with ``0xA1``, which also proves that the device understands it.
-
-    With ``trust_offline`` an ``0xA0`` answer ends the query: the receiver says
-    the mouse is not reachable, and the legacy answer would only repeat the last
-    value it saw. Without it the legacy query stays the fallback, so firmware
-    that does not know the new protocol keeps working.
+    ``online`` is true when the new protocol answered ``0xA1``. With
+    ``trust_offline`` an ``0xA0`` ends the query, because the legacy answer would
+    only repeat the last value; without it the legacy query stays the fallback.
     """
     offline = False
     repeats = FAST_REPEATS if quick else 6
@@ -148,13 +139,12 @@ class LamzuDriver(Driver):
     preferred_interfaces = (2,)
 
     def __init__(self):
-        # Remember the transport that answered last, so polling stays fast.
+        # Transport that answered last, so polling stays fast.
         self._preferred = {}
-        # Keys whose receiver answered the new Aurora protocol at least once.
-        # Only for those does 0xA0 mean "the mouse is off" instead of "try the
-        # legacy query", which would return the receiver's cached value.
+        # Keys that answered 0xA1 at least once; only for those does 0xA0 mean
+        # "switched off" instead of "use the legacy query".
         self._online = set()
-        # Sweeps in a row without a reading, for the short probe.
+        # Sweeps in a row without a reading.
         self._failures = {}
 
     def _transports(self, key):
@@ -168,10 +158,7 @@ class LamzuDriver(Driver):
     def read(self, device):
         key = device.key
         failures = self._failures.get(key, 0)
-        quick = (
-            failures >= FAILURES_BEFORE_FAST
-            and failures % FULL_PROBE_EVERY != 0
-        )
+        quick = failures >= FAILURES_BEFORE_FAST and failures % FULL_PROBE_EVERY != 0
 
         for node in device.sorted_nodes(self.preferred_interfaces):
             if not can_access(node):

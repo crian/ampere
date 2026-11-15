@@ -324,6 +324,8 @@ def install(
     print(
         f"Ampere vendor HID battery daemon {__version__} installed.\n"
         f"\n  {target.program}\n"
+        "\nCheck the service:\n"
+        f"  {name} status     version, unit state, rule and devices\n"
         "\nInspect devices and their answers:\n"
         f"  {name} probe      list HID devices and their driver\n"
         f"  {name} diagnose   query the battery, print the raw answers\n"

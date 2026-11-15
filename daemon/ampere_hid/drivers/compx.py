@@ -26,17 +26,15 @@ import time
 from ..hidraw import HidHandle, can_access, warn_permission
 from .base import Driver
 
-# VIDs seen for the Compx/Nordic 52840 silicon. The Lamzu driver claims the
-# receivers it shares with Lamzu devices (3554, 37b0) and tries the Compx
-# transport itself, so this driver only needs the remaining VIDs.
+# Compx/Nordic 52840 VIDs. The Lamzu driver claims the receivers it shares
+# (3554, 37b0) and tries Compx itself, so only the rest is listed here.
 VENDOR_IDS = {0x373B, 0x260D, 0x33E4}
 
 REPORT_ID = 0x08
 BATTERY_CMD = 0x04
 TIMEOUT = 0.3
-# A receiver with no mouse behind it answers nothing, and a full probe of all
-# three nodes costs about a second. After repeated misses the driver retries one
-# node with a short window and only looks properly every few sweeps.
+# A silent receiver costs about a second per sweep; after misses, use shorter
+# windows and probe all nodes again every fifth sweep.
 FAST_TIMEOUT = 0.12
 FAILURES_BEFORE_FAST = 2
 FULL_PROBE_EVERY = 5
@@ -109,10 +107,7 @@ class CompxDriver(Driver):
     def read(self, device):
         key = device.key
         failures = self._failures.get(key, 0)
-        quick = (
-            failures >= FAILURES_BEFORE_FAST
-            and failures % FULL_PROBE_EVERY != 0
-        )
+        quick = failures >= FAILURES_BEFORE_FAST and failures % FULL_PROBE_EVERY != 0
 
         nodes = device.sorted_nodes(self.preferred_interfaces)
         known = self._node.get(key)

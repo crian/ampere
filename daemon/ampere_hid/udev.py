@@ -15,8 +15,8 @@ GROUPS = (
     (
         "Lamzu / Compx receivers",
         (
-            "Maya X 8K (373e:001e, wired 001c), Thorn and Maya/Atlantis Compx receivers",
-            "(3554:f50d, f50f, f510), Inca and Paro and Maya Champion (37b0:...)",
+            "Maya X 8K (373e:001e, wired 001c), Thorn (3554:f50d, wired f50f),",
+            "Maya/Atlantis receivers (3554:f510), Inca and Paro and Maya Champion (37b0:...)",
         ),
         (
             (0x373E, 0x001E),

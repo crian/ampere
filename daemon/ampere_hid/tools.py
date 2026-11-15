@@ -1,9 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Read-only inspection commands: probe, sniff, diagnose.
 
-None of these needs PyGObject, so they also work where the service itself
-cannot start. ``diagnose`` sends battery queries; nothing here changes a device
-setting.
+No PyGObject needed, and nothing here changes a device setting.
 """
 
 import os

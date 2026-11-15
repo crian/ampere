@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""One screen with the things that decide whether Ampere works."""
+"""One screen with version, service, rule and devices."""
 
 import json
 import os
@@ -12,7 +12,7 @@ STATE_NAMES = {0: "discharging", 1: "charging", 2: "full"}
 
 
 def program_path():
-    """The file that is running, so a stale copy becomes visible."""
+    """Path of the running program."""
     return os.path.abspath(sys.argv[0])
 
 
@@ -78,7 +78,7 @@ def daemon_devices():
 
 
 def render(version, program, service, rule, rule_path, devices):
-    """Format the summary; kept pure so it can be tested without a bus."""
+    """Format the summary."""
     lines = [
         f"version     {version}",
         f"program     {program}",

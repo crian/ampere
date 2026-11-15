@@ -1,7 +1,7 @@
 # Changelog
 
-The version numbers on the left are git tags. EGO assigns its own counter, which
-is noted on each entry so both can be matched up.
+The version numbers on the left are git tags. EGO assigns its own counter to
+extension uploads; entries that went to EGO note it, so both can be matched up.
 
 ## v1.1 – EGO version 2 (2026-11-15)
 

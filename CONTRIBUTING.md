@@ -90,15 +90,18 @@ selects the panel icon and `state` is `0` discharging, `1` charging, `2` full.
 Design notes:
 
 * The sweep runs in a worker thread and `GetDevices` answers from the cache.
-  In the main loop it would take 0.4 s awake and up to 2 s asleep, which delays
-  the icon after login.
+  In the main loop it would take a few hundred milliseconds awake and up to a
+  few seconds asleep, which delays the icon after login.
 * The result is applied on the main loop, which emits `Changed` only when the
   payload differs.
-* Polling is every 30 s. When a receiver is present but does not answer, the
-  worker waits for input reports (`wait_for_activity`) instead of polling: a
-  sleeping mouse sends nothing, so this costs no CPU and returns as soon as the
-  mouse moves, at which point the reading is retried immediately.
-* A device without an answer keeps its last reading for three polls before it
+* The poll timer repeats every 30 s and is not restarted by a sweep, so waiting
+  for a sleeping mouse does not stretch the interval.
+* Kernel hidraw add/remove events trigger a sweep at once (`uevent.py`); without
+  the netlink socket the timer is the only trigger.
+* While a device gives no reading, the worker waits for input reports on its
+  nodes (`wait_for_activity`). A pipe and the uevent handler end the wait at
+  once, and the readings of the devices that did answer are published before it.
+* A device without an answer keeps its last reading for three sweeps before it
   disappears.
 * A driver only sends battery query commands; it never changes device settings.
   Do not add configuration, EEPROM or firmware writes.
@@ -180,8 +183,8 @@ cd daemon && python3 -m unittest discover -s tests -v
 ```
 
 `tests/test_daemon_bus.py` starts the real daemon on a private session bus
-(`dbus-run-session`), asks it for its devices and stops it with SIGTERM. It is
-skipped when PyGObject or `dbus-run-session` is missing.
+(`dbus-run-session`), asks it for its devices and version, and stops it with
+SIGTERM. It is skipped when PyGObject or `dbus-run-session` is missing.
 
 Please add a case for every new report layout, including the "no answer" and
 "out of range" variants. Those are what keep a sleeping mouse from showing a
@@ -216,7 +219,8 @@ chore:    maintenance
 ```
 
 Keep the subject imperative and within 50 characters. `CHANGELOG.md` is written
-by hand for now, one entry per EGO version.
+by hand for now, one entry per release tag; the EGO version is noted where the
+release was uploaded there.
 
 ## Protocol references
 

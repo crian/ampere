@@ -8,6 +8,7 @@ session bus:
   Object:    /org/gnome/shell/extensions/ampere/HidBattery
   Interface: org.gnome.shell.extensions.ampere.HidBattery
   Method:    GetDevices() -> s   JSON: {"devices": [...]}
+  Property:  Version -> s        the service's own version
   Signal:    Changed()
 
 The extension never spawns this; D-Bus activation or the systemd user unit
@@ -41,16 +42,13 @@ from .sweep import read_devices, silent_paths  # noqa: E402
 from .uevent import open_monitor, read_events  # noqa: E402
 
 POLL_SECONDS = 30
-# While a supported receiver is present but does not answer (the mouse is
-# asleep), the daemon waits for input reports instead of polling: a sleeping
-# mouse sends nothing, so this blocks without using CPU and returns the instant
-# the mouse is moved.
+# How long the worker waits for input from devices that answered nothing.
+# A sleeping mouse sends nothing, so this uses no CPU.
 ACTIVITY_WAIT_SECONDS = 25
 UEVENT_RETRY_DELAYS_MS = (300, 1200)
 GRACE_POLLS = 3
-# The service is started on demand over D-Bus, so it does not need to keep
-# running once nothing asks for data. After this long without a GetDevices call
-# it exits; the next call starts it again. 0 disables the exit.
+# D-Bus starts the service on demand, so it exits again after this long without
+# a GetDevices call. 0 disables the exit.
 DEFAULT_IDLE_EXIT_SECONDS = 300
 
 
@@ -85,12 +83,7 @@ INTROSPECTION_XML = """
 """
 
 class Daemon:
-    """Serves cached readings over D-Bus. The sweep runs in a thread.
-
-    GetDevices must not wait for a device query. A sweep takes a few hundred
-    milliseconds with an awake mouse and several seconds with sleeping ones,
-    which delays the panel icon after login and can hit the caller's timeout.
-    """
+    """Serve cached readings over D-Bus; the sweep runs in a thread."""
 
     def __init__(self, loop):
         self._loop = loop
@@ -117,7 +110,7 @@ class Daemon:
             self._connection.emit_signal(None, OBJECT_PATH, IFACE, "Changed", None)
 
     def _schedule(self):
-        """Start the poll timer; it repeats on its own every POLL_SECONDS."""
+        """Start the repeating poll timer."""
         if self._timer:
             GLib.source_remove(self._timer)
         self._timer = GLib.timeout_add_seconds(POLL_SECONDS, self._on_timeout)
@@ -152,9 +145,7 @@ class Daemon:
         self._drain_wake()
         try:
             matched, fresh = read_devices()
-            # A receiver that answered nothing: its mouse is asleep or switched
-            # off. Wait for its input instead of polling; the first report after
-            # waking ends the wait.
+            # Nothing answered from these: wait for input instead of polling.
             paths = silent_paths(matched, fresh)
             if paths:
                 # Do not hold back the devices that did answer: show them now.

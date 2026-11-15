@@ -5,14 +5,13 @@ import GLib from 'gi://GLib';
 
 import {STATE, isCancelled} from './utils.js';
 
-// Session-bus service provided by the optional vendor HID companion daemon
-// (see daemon/ in the repository). The extension never spawns it directly.
+// Session-bus service of the optional companion daemon; the extension never
+// spawns it itself.
 export const HID_BATTERY_BUS_NAME = 'org.gnome.shell.extensions.ampere.HidBattery';
 export const HID_BATTERY_OBJECT_PATH = '/org/gnome/shell/extensions/ampere/HidBattery';
 export const HID_BATTERY_IFACE = 'org.gnome.shell.extensions.ampere.HidBattery';
 
-// Oldest companion service this extension works with. Raise it when the
-// extension starts to rely on something that a newer service added.
+// Oldest service this extension works with; raise it when a newer one is needed.
 export const MIN_DAEMON_VERSION = '1.1.1';
 
 const STATE_BY_PROTOCOL = {
@@ -67,10 +66,7 @@ const getDevices = (cancellable, flags = Gio.DBusCallFlags.NONE) =>
         'GetDevices', null, new GLib.VariantType('(s)'), flags, 5000,
         cancellable);
 
-/**
- * Version of the running companion service as a string, or null when it
- * answers but has no Version property, which means it predates this check.
- */
+/** Version of the running service; null when it predates the property. */
 export async function readHidVersion(cancellable) {
     try {
         const reply = await Gio.DBus.session.call(
@@ -90,9 +86,8 @@ export async function readHidVersion(cancellable) {
 }
 
 /**
- * True when the service is older than MIN_DAEMON_VERSION. null (no Version
- * property) counts as older. A development build ('dev'), an unreadable version
- * and undefined (not asked) never count, so nothing nags without a reason.
+ * True when the version is older than MIN_DAEMON_VERSION; null counts as older,
+ * 'dev' and unknown values never do.
  */
 export function daemonTooOld(version) {
     if (version === null)

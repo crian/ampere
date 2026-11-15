@@ -86,10 +86,8 @@ export default class AmperePrefs extends ExtensionPreferences {
         vendor.add(vendorRow);
 
         // Shown while the service is missing or older than the extension. The
-        // command is copied to the clipboard here, never executed from the
-        // extension.
-        // Three short lines read better than one long, wrapped line; the copy
-        // button still copies a command that runs as it is.
+        // command is only copied, never executed.
+        // Three lines read better in the row; the copy button copies them as is.
         const installCommand = [
             'cd "$(mktemp -d)"',
             'curl -fsSLo ampere-hid https://github.com/crian/ampere/releases/latest/download/ampere-hid',
@@ -115,8 +113,7 @@ export default class AmperePrefs extends ExtensionPreferences {
         });
         warning.add_suffix(copyButton);
         vendor.add(warning);
-        // version: undefined when it was not asked, null when the service has
-        // no Version property yet.
+        // version: undefined = not asked, null = no Version property yet.
         const serviceWarning = (ok, version) => {
             const outdated = ok && daemonTooOld(version);
             if (!outdated) {

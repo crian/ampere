@@ -57,8 +57,9 @@ To check the download, fetch `ampere-hid.sha256` from the same release and run
 `sha256sum -c ampere-hid.sha256` next to the file. That catches a broken or
 truncated download; it does not prove that the release itself is genuine.
 
-This is a one-time command for you to run. The extension never downloads or
-executes anything itself; it only talks to the service over D-Bus.
+This is a one-time command for you to run; `ampere-hid status` afterwards shows
+what the service sees. The extension never downloads or executes anything
+itself; it only talks to the service over D-Bus.
 
 Then turn on "Vendor HID battery" in the extension preferences. The preferences
 also tell you when the service is older than the extension expects; run the
@@ -98,9 +99,9 @@ session startup instead.
 | Device | Transport | Verified |
 | --- | --- | --- |
 | Lamzu Maya X 8K (`373e:001e`, `001c`) | Aurora 65-byte feature report | yes |
-| Lamzu Thorn (`3554:f50d`) | Compx 17-byte report | yes |
+| Lamzu Thorn (`3554:f50d`, on the cable `3554:f50f`) | Compx 17-byte report | yes |
 | Other Lamzu receivers (`3554`, `37b0`) | Aurora and Compx, whichever answers | not tested |
-| ATK A9 Max Ultra 2.0 (`373b:11fe`) | Compx 17-byte report | yes |
+| ATK A9 Max Ultra 2.0 (`373b:11fe`, on the cable `373b:1270`) | Compx 17-byte report | yes |
 | Other ATK/VXE/VGN and Compx rebrands (`373b`, `260d`, `33e4`) | Compx | not tested |
 | MCHOSE A7 V2 Pro (`3837:100a`, on the cable `3837:4018`) | MCHOSE feature query | yes |
 | Other MCHOSE receivers (`3837`, `5253`) | MCHOSE feature query | not tested |
@@ -110,28 +111,45 @@ missing, run the command below. Also check whether its product ID is in the
 output of `ampere-hid rules`; if it is not, the VID:PID that `lsusb` shows has
 to be added (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 
-### If a device does not show up
+### If a mouse is not recognized
 
-```sh
-ampere-hid status
-```
+1. **What does the service see?**
 
-This shows the version, whether the service runs, whether the udev rule matches
-this version and what the service currently sees. For the raw answers, run:
+   ```sh
+   ampere-hid status
+   ```
 
-```sh
-ampere-hid diagnose
-```
+   Version, service state, whether the udev rule matches this version and the
+   devices it returns. "inactive" is normal: D-Bus starts the service on demand.
 
-If the mouse is connected by cable and receiver at the same time, it appears
+2. **What does the device answer?**
+
+   ```sh
+   ampere-hid diagnose
+   ```
+
+   Every hidraw device with its driver and the raw answer. It only sends battery
+   queries and changes no settings. A sleeping mouse answers nothing; move it
+   and try again. A node it cannot open carries a `reason`: either the rule is
+   missing or its product ID is not in the table.
+
+3. **Is the product ID in the rule?**
+
+   ```sh
+   lsusb -d <vendor>:
+   ampere-hid rules | grep -i idProduct
+   ```
+
+   If `lsusb` shows a product ID that the rule does not list, add it (see
+   [CONTRIBUTING.md](CONTRIBUTING.md)) or open an issue with that line.
+
+If all of that looks right and the panel stays empty, open an issue with the
+output of both commands and the model name.
+
+Devices reported by UPower do not need the service at all; check them with
+`upower -e`. A mouse connected by cable and receiver at the same time appears
 twice: the two connections report different serial numbers, so they are two
 devices as far as the service can tell.
-
-It shows every hidraw device, its driver and the raw answer. It only sends
-battery queries and changes no settings. A sleeping mouse answers nothing; move
-it and try again.
-
-Devices in UPower do not need the service at all. Check them with `upower -e`.
 
 `systemctl --user stop ampere-hid` does not keep the service down for long: the
 next query from the extension starts it again. Use the preference switch to

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Tests for device keys, driver matching and the grace period.
+"""Tests for keys, drivers, grace, uevent, status and the backoff.
 
 These do not need hardware or PyGObject.
 """

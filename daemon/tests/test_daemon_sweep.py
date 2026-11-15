@@ -1,8 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""The daemon's worker with fake devices: no bus, no hardware.
+"""The daemon's worker with fake devices; skipped without PyGObject.
 
-Needs PyGObject; skipped without it. A device that answers must not wait for one
-that is asleep, and a new request must end the wait for the sleeping one.
+A device that answers must not wait for one that is asleep.
 """
 
 import json
