@@ -18,6 +18,11 @@ is noted on each entry so both can be matched up.
 - Preferences: the install command is rendered in monospace, and the note about
   merged entries now only mentions UPower devices
 
+The faster detection comes from the companion service, which is a separate
+program: after updating the extension, run `ampere-hid install` or download the
+new `ampere-hid` from the release. The extension package itself still contains
+no daemon code.
+
 ## v1.0 – EGO version 1 (2026-11-14)
 
 First release.
