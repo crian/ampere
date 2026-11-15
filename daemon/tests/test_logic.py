@@ -73,8 +73,8 @@ class CompxBackoffTests(unittest.TestCase):
         self.calls = []
         self.result = None
 
-    def read_node(self, node, timeout=compx.TIMEOUT, feature=True):
-        self.calls.append((node.path, timeout, feature))
+    def read_node(self, node, timeout=compx.TIMEOUT):
+        self.calls.append((node.path, timeout))
         return self.result
 
     def patch(self):
@@ -91,9 +91,8 @@ class CompxBackoffTests(unittest.TestCase):
             self.assertEqual(len(self.calls), 6)
             self.calls.clear()
             self.assertIsNone(self.driver.read(self.device))
-        self.assertEqual(len(self.calls), 1)
-        self.assertEqual(self.calls[0][1], compx.FAST_TIMEOUT)
-        self.assertFalse(self.calls[0][2])
+        self.assertEqual(len(self.calls), 3)
+        self.assertTrue(all(call[1] == compx.FAST_TIMEOUT for call in self.calls))
 
     def test_a_full_probe_comes_back(self):
         with self.patch():
@@ -105,8 +104,8 @@ class CompxBackoffTests(unittest.TestCase):
         self.assertTrue(all(call[1] == compx.TIMEOUT for call in self.calls))
 
     def test_remembers_the_node_that_answered(self):
-        def answer_on_one(node, timeout=compx.TIMEOUT, feature=True):
-            self.calls.append((node.path, timeout, feature))
+        def answer_on_one(node, timeout=compx.TIMEOUT):
+            self.calls.append((node.path, timeout))
             return (50, 0) if node.path.endswith("1") else None
 
         with self.patch(), mock.patch.object(compx, "read_node", answer_on_one):
@@ -125,7 +124,7 @@ class CompxBackoffTests(unittest.TestCase):
             self.calls.clear()
             self.assertEqual(self.driver.read(self.device), (50, 0))
             self.assertEqual(len(self.calls), 1)
-            self.assertFalse(self.calls[0][2])  # still the cheap probe
+            self.assertEqual(self.calls[0][1], compx.FAST_TIMEOUT)
 
             self.result = None
             self.calls.clear()

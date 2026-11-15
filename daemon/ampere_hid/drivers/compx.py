@@ -76,7 +76,7 @@ def parse_battery_response(resp):
     return level, state
 
 
-def read_node(node, timeout=TIMEOUT, feature=True):
+def read_node(node, timeout=TIMEOUT):
     """Query the battery over the Compx transport, or return ``None``."""
     with HidHandle(node.path) as hid:
         hid.flush()
@@ -91,8 +91,6 @@ def read_node(node, timeout=TIMEOUT, feature=True):
                 return parsed
             time.sleep(0.01)
 
-        if not feature:
-            return None
         return parse_battery_response(hid.read_feature(17, REPORT_ID))
 
 
@@ -117,8 +115,6 @@ class CompxDriver(Driver):
         known = self._node.get(key)
         if known:
             nodes.sort(key=lambda node: node.path != known)
-        if quick:
-            nodes = nodes[:1]
 
         for node in nodes:
             if not can_access(node):
@@ -127,11 +123,7 @@ class CompxDriver(Driver):
                     "run `ampere-hid install --udev`",
                 )
                 continue
-            battery = read_node(
-                node,
-                timeout=FAST_TIMEOUT if quick else TIMEOUT,
-                feature=not quick,
-            )
+            battery = read_node(node, timeout=FAST_TIMEOUT if quick else TIMEOUT)
             if battery:
                 self._node[key] = node.path
                 self._failures[key] = 0
