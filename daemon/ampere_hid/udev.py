@@ -47,6 +47,8 @@ GROUPS = (
             (0x373B, 0x11B6),
             (0x373B, 0x11D9),
             (0x373B, 0x11FE),
+            # The ATK A9 Max Ultra 2.0 on its cable enumerates with this ID.
+            (0x373B, 0x1270),
             (0x3554, 0xF503),
             (0x3554, 0xF502),
             (0x3554, 0xF524),
