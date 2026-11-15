@@ -175,8 +175,12 @@ export default class AmperePrefs extends ExtensionPreferences {
             if (low >= medium)
                 settings.set_int('threshold-low', Math.max(1, medium - 1));
         };
-        settings.connect('changed::threshold-medium', clampThresholds);
-        settings.connect('changed::threshold-low', clampThresholds);
+        const thresholdMedId = settings.connect('changed::threshold-medium', clampThresholds);
+        const thresholdLowId = settings.connect('changed::threshold-low', clampThresholds);
+        window.connect('destroy', () => {
+            settings.disconnect(thresholdMedId);
+            settings.disconnect(thresholdLowId);
+        });
 
         // --- Devices, filled asynchronously ---
         const group = new Adw.PreferencesGroup({
