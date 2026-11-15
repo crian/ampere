@@ -14,7 +14,7 @@ from unittest import mock
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from ampere_hid import grace, uevent  # noqa: E402
-from ampere_hid.drivers import compx, find_driver, matching_drivers  # noqa: E402
+from ampere_hid.drivers import compx, find_driver, lamzu, matching_drivers  # noqa: E402
 from ampere_hid.hidraw import HidDevice, HidNode  # noqa: E402
 
 
@@ -131,6 +131,58 @@ class CompxBackoffTests(unittest.TestCase):
             self.calls.clear()
             self.driver.read(self.device)
         self.assertEqual(len(self.calls), 3)  # failures were reset
+
+
+class LamzuOfflineTests(unittest.TestCase):
+    """An 0xA0 answer means the mouse is off, but only for firmware that
+    proved it speaks the new protocol."""
+
+    ONLINE = bytes([0xA1, 0x00, 0x02, 0x02, 0x00, 0x83, 0x00, 0x64])
+    OFFLINE = bytes([0xA0, 0x00, 0x02, 0x02, 0x00, 0x83, 0x00, 0x00])
+
+    def setUp(self):
+        self.node = HidNode("/dev/hidraw-test", 0x373E, 0x001E, "x", "", 2)
+
+    def patch(self, answer):
+        self.legacy = mock.Mock(return_value=(50, 0))
+        return mock.patch.multiple(
+            lamzu,
+            aurora_query=mock.Mock(return_value=answer),
+            query_feature=self.legacy,
+        )
+
+    def test_online_answer_is_used(self):
+        with self.patch(self.ONLINE):
+            battery, online = lamzu.aurora_read_node(self.node)
+        self.assertEqual(battery, (100, 0))
+        self.assertTrue(online)
+        self.assertFalse(self.legacy.called)
+
+    def test_offline_falls_back_until_the_device_is_known(self):
+        with self.patch(self.OFFLINE):
+            battery, online = lamzu.aurora_read_node(self.node)
+        self.assertEqual(battery, (50, 0))
+        self.assertFalse(online)
+        self.assertTrue(self.legacy.called)
+
+    def test_offline_is_final_when_the_device_is_known(self):
+        with self.patch(self.OFFLINE):
+            battery, online = lamzu.aurora_read_node(self.node, trust_offline=True)
+        self.assertIsNone(battery)
+        self.assertFalse(online)
+        self.assertFalse(self.legacy.called)
+
+    def test_the_driver_learns_the_new_protocol(self):
+        device = make_device(0x373E, 0x001E)
+        driver = lamzu.LamzuDriver()
+        answers = [((80, 0), True), (None, False)]
+        with mock.patch.object(lamzu, "can_access", return_value=True), \
+                mock.patch.object(compx, "read_node", return_value=None), \
+                mock.patch.object(lamzu, "aurora_read_node",
+                                  side_effect=answers) as aurora:
+            self.assertEqual(driver.read(device), (80, 0))
+            self.assertIsNone(driver.read(device))
+        aurora.assert_called_with(device.nodes[0], True)
 
 
 class DeviceKeyTests(unittest.TestCase):

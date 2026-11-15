@@ -10,7 +10,9 @@ Tested with a Maya X 8K (``373e:001e``, Aurora) and a Thorn receiver
 (``3554:f50d``, Compx). Layout reference: github.com/anany1702/lamzu-ctl
 """
 
-from ..hidraw import can_access, query_feature, warn_permission
+import time
+
+from ..hidraw import REPORT_SIZE, HidHandle, can_access, query_feature, warn_permission
 from . import compx
 from .base import Driver
 
@@ -18,6 +20,9 @@ VENDOR_IDS = {0x3554, 0x373E, 0x37B0}
 
 COMPX = "compx"
 AURORA = "aurora"
+# First byte of the new protocol's answer: reachable, or not.
+AURORA_ONLINE = 0xA1
+AURORA_OFFLINE = 0xA0
 
 
 def build_aurora_battery_packet(new_protocol=True):
@@ -65,17 +70,64 @@ def parse_aurora_battery_response(resp):
     return level, state
 
 
-def aurora_read_node(node):
-    """Query the battery over the Aurora transport, or return ``None``."""
-    # New protocol twice: a sleeping mouse occasionally drops the first
-    # request. The legacy request is the last fallback.
-    for new_protocol in (True, True, False):
-        battery = query_feature(
-            node, build_aurora_battery_packet(new_protocol), parse_aurora_battery_response
-        )
-        if battery:
-            return battery
+def aurora_query(node):
+    """Ask with the new protocol and return its first frame, or ``None``.
+
+    The first byte tells whether the mouse is reachable: ``0xA1`` means yes and
+    carries the reading, ``0xA0`` means the receiver has no link. The legacy
+    query answers in both cases with the value it saw last, so it cannot tell.
+    """
+    packet = build_aurora_battery_packet(True)
+    try:
+        with HidHandle(node.path) as hid:
+            hid.flush()
+            if not hid.send(packet):
+                return None
+            for _ in range(6):
+                time.sleep(0.02)
+                raw = hid.read_feature(REPORT_SIZE, 0x00)
+                if not raw:
+                    continue
+                if len(raw) >= 2 and raw[0] == 0x00:
+                    raw = raw[1:]
+                if raw[0] in (AURORA_ONLINE, AURORA_OFFLINE):
+                    return raw
+    except OSError:
+        return None
     return None
+
+
+def aurora_read_node(node, trust_offline=False):
+    """Query the battery over the Aurora transport.
+
+    Returns ``(reading, online)``. ``online`` is true when the new protocol
+    answered with ``0xA1``, which also proves that the device understands it.
+
+    With ``trust_offline`` an ``0xA0`` answer ends the query: the receiver says
+    the mouse is not reachable, and the legacy answer would only repeat the last
+    value it saw. Without it the legacy query stays the fallback, so firmware
+    that does not know the new protocol keeps working.
+    """
+    offline = False
+    # New protocol twice: a sleeping mouse occasionally drops the first request.
+    for _ in range(2):
+        answer = aurora_query(node)
+        if answer is None:
+            continue
+        if answer[0] == AURORA_OFFLINE:
+            offline = True
+            break
+        battery = parse_aurora_battery_response(answer)
+        if battery:
+            return battery, True
+
+    if offline and trust_offline:
+        return None, False
+
+    battery = query_feature(
+        node, build_aurora_battery_packet(False), parse_aurora_battery_response
+    )
+    return battery, False
 
 
 class LamzuDriver(Driver):
@@ -87,6 +139,10 @@ class LamzuDriver(Driver):
     def __init__(self):
         # Remember the transport that answered last, so polling stays fast.
         self._preferred = {}
+        # Keys whose receiver answered the new Aurora protocol at least once.
+        # Only for those does 0xA0 mean "the mouse is off" instead of "try the
+        # legacy query", which would return the receiver's cached value.
+        self._online = set()
 
     def _transports(self, key):
         order = [COMPX, AURORA]
@@ -97,6 +153,7 @@ class LamzuDriver(Driver):
         return order
 
     def read(self, device):
+        key = device.key
         for node in device.sorted_nodes(self.preferred_interfaces):
             if not can_access(node):
                 warn_permission(
@@ -105,11 +162,14 @@ class LamzuDriver(Driver):
                 )
                 continue
 
-            for transport in self._transports(device.key):
-                battery = (
-                    compx.read_node(node) if transport == COMPX else aurora_read_node(node)
-                )
+            for transport in self._transports(key):
+                if transport == COMPX:
+                    battery = compx.read_node(node)
+                else:
+                    battery, online = aurora_read_node(node, key in self._online)
+                    if online:
+                        self._online.add(key)
                 if battery:
-                    self._preferred[device.key] = transport
+                    self._preferred[key] = transport
                     return battery
         return None
