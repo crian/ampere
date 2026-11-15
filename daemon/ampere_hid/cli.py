@@ -63,7 +63,7 @@ def cmd_uninstall(args):
 
 def cmd_build(args):
     with open(args.output, "wb") as f:
-        f.write(build_bytes(args.version))
+        f.write(build_bytes(args.stamp))
     os.chmod(args.output, 0o755)
     return 0
 
@@ -99,8 +99,8 @@ def build_parser():
     p = add("build", cmd_build, "write the single-file program (for packaging)")
     p.add_argument("output")
     p.add_argument(
-        "--version", dest="version", metavar="VERSION",
-        help="stamp this version into the program (the release does this)",
+        "--stamp", dest="stamp", metavar="VERSION",
+        help="write this version into the program (the release does this)",
     )
     return parser
 

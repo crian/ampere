@@ -40,7 +40,7 @@ jobs:
         run: |
           version="${GITHUB_REF_NAME#v}"
           cd daemon
-          python3 -m ampere_hid build --version "$version" ../ampere-hid
+          python3 -m ampere_hid build --stamp "$version" ../ampere-hid
           cd ..
           test "$(./ampere-hid --version)" = "ampere-hid ${version}"
           sha256sum ampere-hid > ampere-hid.sha256
