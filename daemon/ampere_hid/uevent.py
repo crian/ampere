@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Watch kernel uevents so device changes do not wait for the next poll."""
 
+import errno
 import os
 import socket
 
@@ -25,3 +26,27 @@ def open_monitor():
 def mentions_hidraw(message):
     """True when a uevent payload is about a hidraw device."""
     return b"SUBSYSTEM=hidraw" in message
+
+
+def read_events(sock):
+    """Drain ``sock`` and report whether hidraw nodes were added or removed.
+
+    Returns ``(added, removed)``. When the kernel dropped events because the
+    receive buffer overflowed (``ENOBUFS``), what happened is unknown, so both
+    are reported and the caller looks again. Any other socket error is raised.
+    """
+    added = removed = False
+    while True:
+        try:
+            message = sock.recv(8192)
+        except BlockingIOError:
+            break
+        except OSError as e:
+            if e.errno == errno.ENOBUFS:
+                return True, True
+            raise
+        if not mentions_hidraw(message):
+            continue
+        added = added or b"ACTION=add" in message
+        removed = removed or b"ACTION=remove" in message
+    return added, removed

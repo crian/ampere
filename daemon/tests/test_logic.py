@@ -4,7 +4,9 @@
 These do not need hardware or PyGObject.
 """
 
+import errno
 import pathlib
+import socket
 import sys
 import unittest
 
@@ -119,6 +121,50 @@ class UeventTests(unittest.TestCase):
         self.assertFalse(
             uevent.mentions_hidraw(b"add@/devices/.../usb1\x00SUBSYSTEM=usb\x00")
         )
+
+    def events(self, *messages):
+        """A socket pair standing in for the kernel's uevent socket."""
+        receiver, sender = socket.socketpair(socket.AF_UNIX, socket.SOCK_DGRAM)
+        self.addCleanup(receiver.close)
+        self.addCleanup(sender.close)
+        receiver.setblocking(False)
+        for message in messages:
+            sender.send(message)
+        return receiver
+
+    ADD = b"add@/devices/x/hidraw/hidraw%d\x00ACTION=add\x00SUBSYSTEM=hidraw\x00"
+    REMOVE = b"remove@/devices/x/hidraw/hidraw3\x00ACTION=remove\x00SUBSYSTEM=hidraw\x00"
+    OTHER = b"add@/devices/x/usb1\x00ACTION=add\x00SUBSYSTEM=usb\x00"
+
+    def test_a_burst_of_adds_is_one_added(self):
+        sock = self.events(self.ADD % 3, self.OTHER, self.ADD % 4, self.ADD % 5)
+        self.assertEqual(uevent.read_events(sock), (True, False))
+
+    def test_remove_is_reported(self):
+        self.assertEqual(uevent.read_events(self.events(self.REMOVE)), (False, True))
+
+    def test_add_and_remove_together(self):
+        sock = self.events(self.REMOVE, self.ADD % 4)
+        self.assertEqual(uevent.read_events(sock), (True, True))
+
+    def test_other_subsystems_and_an_empty_queue_report_nothing(self):
+        self.assertEqual(uevent.read_events(self.events(self.OTHER)), (False, False))
+        self.assertEqual(uevent.read_events(self.events()), (False, False))
+
+    def test_dropped_events_count_as_both(self):
+        class Overflowing:
+            def recv(self, size):
+                raise OSError(errno.ENOBUFS, "No buffer space available")
+
+        self.assertEqual(uevent.read_events(Overflowing()), (True, True))
+
+    def test_other_errors_are_raised(self):
+        class Broken:
+            def recv(self, size):
+                raise OSError(errno.EBADF, "Bad file descriptor")
+
+        with self.assertRaises(OSError):
+            uevent.read_events(Broken())
 
     def test_monitor_can_be_opened(self):
         try:

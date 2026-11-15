@@ -156,11 +156,15 @@ def can_access(node):
     return os.access(node.path, os.R_OK | os.W_OK)
 
 
-def wait_for_activity(paths, timeout):
+def wait_for_activity(paths, timeout, wake_fd=None):
     """Block until one of the hidraw nodes reports input, or the timeout expires.
 
     A sleeping mouse sends nothing, so this uses no CPU while idle and returns
     as soon as the mouse moves, which is when a reading becomes possible again.
+
+    ``wake_fd`` is the read end of a pipe: when it becomes readable the wait
+    ends early with ``True``, so the caller can react to something else, such as
+    a newly plugged-in device, without waiting out the timeout.
     """
     fds = []
     try:
@@ -169,11 +173,16 @@ def wait_for_activity(paths, timeout):
                 fds.append(os.open(path, os.O_RDONLY | os.O_NONBLOCK))
             except OSError:
                 continue
+        watch = list(fds)
+        if wake_fd is not None:
+            watch.append(wake_fd)
         if not fds:
             # Nothing to watch (e.g. missing permission): don't spin.
-            time.sleep(min(timeout, 1.0))
-            return False
-        readable, _, _ = select.select(fds, [], [], timeout)
+            timeout = min(timeout, 1.0)
+            if not watch:
+                time.sleep(timeout)
+                return False
+        readable, _, _ = select.select(watch, [], [], timeout)
         return bool(readable)
     finally:
         for fd in fds:

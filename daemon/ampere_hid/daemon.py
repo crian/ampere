@@ -16,6 +16,7 @@ starts it on demand.
 Without D-Bus, see ``ampere-hid --help`` (once, probe, diagnose, sniff).
 """
 
+import contextlib
 import json
 import os
 import signal
@@ -37,7 +38,7 @@ from . import __version__, grace  # noqa: E402
 from .hidraw import can_access, log, wait_for_activity  # noqa: E402
 from .names import BUS_NAME, IFACE, OBJECT_PATH  # noqa: E402
 from .sweep import read_devices  # noqa: E402
-from .uevent import mentions_hidraw, open_monitor  # noqa: E402
+from .uevent import open_monitor, read_events  # noqa: E402
 
 POLL_SECONDS = 30
 # While a supported receiver is present but does not answer (the mouse is
@@ -45,6 +46,7 @@ POLL_SECONDS = 30
 # mouse sends nothing, so this blocks without using CPU and returns the instant
 # the mouse is moved.
 ACTIVITY_WAIT_SECONDS = 25
+UEVENT_RETRY_DELAYS_MS = (300, 1200)
 GRACE_POLLS = 3
 # The service is started on demand over D-Bus, so it does not need to keep
 # running once nothing asks for data. After this long without a GetDevices call
@@ -101,6 +103,9 @@ class Daemon:
         self._timer = 0
         self._monitor = None
         self._retry_id = 0
+        self._wake_r, self._wake_w = os.pipe()
+        os.set_blocking(self._wake_r, False)
+        os.set_blocking(self._wake_w, False)
         self._last_call = time.monotonic()
 
     def _set_payload(self, items):
@@ -129,11 +134,22 @@ class Daemon:
         """Start a sweep in the background, unless one is already running."""
         if self._polling:
             self._poll_again = True
+            self._wake()
             return
         self._polling = True
         threading.Thread(target=self._worker, daemon=True, name="ampere-hid-poll").start()
 
+    def _wake(self):
+        with contextlib.suppress(OSError):
+            os.write(self._wake_w, b"x")
+
+    def _drain_wake(self):
+        with contextlib.suppress(OSError):  # BlockingIOError once it is empty
+            while os.read(self._wake_r, 64):
+                pass
+
     def _worker(self):
+        self._drain_wake()
         try:
             matched, fresh = read_devices()
             if matched and not fresh:
@@ -145,7 +161,7 @@ class Daemon:
                     for node in device.nodes
                     if can_access(node)
                 ]
-                if wait_for_activity(paths, ACTIVITY_WAIT_SECONDS):
+                if wait_for_activity(paths, ACTIVITY_WAIT_SECONDS, self._wake_r):
                     matched, fresh = read_devices()
         except Exception as e:  # a broken driver must not kill the daemon
             log(f"poll failed: {e}")
@@ -189,18 +205,13 @@ class Daemon:
         )
 
     def _on_uevent(self, fd, condition):
-        added = removed = False
-        while True:
-            try:
-                message = self._monitor.recv(8192)
-            except BlockingIOError:
-                break
-            except OSError:
-                return GLib.SOURCE_REMOVE
-            if not mentions_hidraw(message):
-                continue
-            added = added or b"ACTION=add" in message
-            removed = removed or b"ACTION=remove" in message
+        try:
+            added, removed = read_events(self._monitor)
+        except OSError as e:
+            log(f"stopped watching udev events: {e}")
+            self._monitor.close()
+            self._monitor = None
+            return GLib.SOURCE_REMOVE
 
         if removed:
             self.request_poll()
@@ -210,14 +221,12 @@ class Daemon:
             self._retry_soon()
         return GLib.SOURCE_CONTINUE
 
-    RETRY_DELAYS_MS = (300, 1200)
-
     def _retry_soon(self, attempt=0):
         """Sweep again after a new device had time to become readable."""
-        if self._retry_id or attempt >= len(self.RETRY_DELAYS_MS):
+        if self._retry_id or attempt >= len(UEVENT_RETRY_DELAYS_MS):
             return
         self._retry_id = GLib.timeout_add(
-            self.RETRY_DELAYS_MS[attempt], self._on_retry, attempt
+            UEVENT_RETRY_DELAYS_MS[attempt], self._on_retry, attempt
         )
 
     def _on_retry(self, attempt):

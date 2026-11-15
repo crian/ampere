@@ -173,6 +173,30 @@ class ActivityWaitTests(unittest.TestCase):
         self.assertTrue(hidraw.wait_for_activity([path], 5.0))
         self.assertLess(time.monotonic() - start, 2.0)
 
+    def test_wake_fd_ends_the_wait_early(self):
+        wake_r, wake_w = os.pipe()
+        self.addCleanup(os.close, wake_r)
+        self.addCleanup(os.close, wake_w)
+        threading.Timer(0.15, os.write, (wake_w, b"x")).start()
+        start = time.monotonic()
+        self.assertTrue(hidraw.wait_for_activity([self._fifo()], 5.0, wake_r))
+        self.assertLess(time.monotonic() - start, 2.0)
+
+    def test_wake_fd_works_when_no_node_can_be_opened(self):
+        wake_r, wake_w = os.pipe()
+        self.addCleanup(os.close, wake_r)
+        self.addCleanup(os.close, wake_w)
+        os.write(wake_w, b"x")
+        self.assertTrue(hidraw.wait_for_activity(["/nonexistent/hidraw"], 5.0, wake_r))
+
+    def test_unused_wake_fd_does_not_change_the_timeout(self):
+        wake_r, wake_w = os.pipe()
+        self.addCleanup(os.close, wake_r)
+        self.addCleanup(os.close, wake_w)
+        start = time.monotonic()
+        self.assertFalse(hidraw.wait_for_activity([self._fifo()], 0.2, wake_r))
+        self.assertGreaterEqual(time.monotonic() - start, 0.19)
+
     def test_missing_nodes_do_not_spin(self):
         start = time.monotonic()
         self.assertFalse(hidraw.wait_for_activity(["/nonexistent/hidraw"], 0.2))
