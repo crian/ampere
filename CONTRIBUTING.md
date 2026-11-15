@@ -177,6 +177,10 @@ hardware (the installer tests use a temporary home and a fake `systemctl`):
 cd daemon && python3 -m unittest discover -s tests -v
 ```
 
+`tests/test_daemon_bus.py` starts the real daemon on a private session bus
+(`dbus-run-session`), asks it for its devices and stops it with SIGTERM. It is
+skipped when PyGObject or `dbus-run-session` is missing.
+
 Please add a case for every new report layout, including the "no answer" and
 "out of range" variants. Those are what keep a sleeping mouse from showing a
 bogus percentage.
