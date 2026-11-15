@@ -154,10 +154,7 @@ class MchoseDriver(Driver):
         first = None
         for node in nodes:
             if not can_access(node):
-                warn_permission(
-                    node.path,
-                    "run `ampere-hid install --udev`",
-                )
+                warn_permission(node)
                 continue
             if first is None:
                 first = node

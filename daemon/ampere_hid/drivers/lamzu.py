@@ -156,10 +156,7 @@ class LamzuDriver(Driver):
         key = device.key
         for node in device.sorted_nodes(self.preferred_interfaces):
             if not can_access(node):
-                warn_permission(
-                    node.path,
-                    "run `ampere-hid install --udev`",
-                )
+                warn_permission(node)
                 continue
 
             for transport in self._transports(key):

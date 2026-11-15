@@ -14,6 +14,8 @@ import select
 import sys
 import time
 
+from . import udev
+
 REPORT_SIZE = 65
 
 
@@ -59,11 +61,25 @@ def clean_name(name):
     return " ".join(parts) or "HID device"
 
 
-def warn_permission(path, hint="install the udev rule and reload udev"):
-    if path in _warned:
+def access_help(node):
+    """Return ``(reason, hint)`` for a node the user may not open."""
+    if (node.vendor, node.product) not in udev.product_ids():
+        return (
+            f"{node.vendor:04x}:{node.product:04x} is not in the udev table",
+            "add its product ID to ampere_hid/udev.py",
+        )
+    return (
+        "the udev rule is missing or outdated",
+        "run `ampere-hid install --udev`",
+    )
+
+
+def warn_permission(node):
+    if node.path in _warned:
         return
-    _warned.add(path)
-    log(f"no access to {path}; {hint}")
+    _warned.add(node.path)
+    reason, hint = access_help(node)
+    log(f"no access to {node.path}; {reason}; {hint}")
 
 
 class HidNode:

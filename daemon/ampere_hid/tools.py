@@ -10,7 +10,7 @@ import os
 import time
 
 from .drivers import find_driver, matching_drivers
-from .hidraw import HidHandle, enumerate_nodes, group_nodes
+from .hidraw import HidHandle, access_help, enumerate_nodes, group_nodes
 
 
 def probe():
@@ -70,6 +70,19 @@ def sniff(seconds=3.0):
     return result
 
 
+def node_entry(node):
+    """Access state of one node, with the reason when it cannot be opened."""
+    accessible = os.access(node.path, os.R_OK | os.W_OK)
+    return {
+        "path": node.path,
+        "vendor": f"{node.vendor:04x}",
+        "product": f"{node.product:04x}",
+        "interface": node.interface,
+        "accessible": accessible,
+        "reason": None if accessible else access_help(node)[0],
+    }
+
+
 def diagnose():
     """Explain every hidraw device, its driver and the raw answers."""
     result = []
@@ -78,16 +91,7 @@ def diagnose():
         entry = {
             "key": device.key,
             "name": device.name,
-            "nodes": [
-                {
-                    "path": node.path,
-                    "vendor": f"{node.vendor:04x}",
-                    "product": f"{node.product:04x}",
-                    "interface": node.interface,
-                    "accessible": os.access(node.path, os.R_OK | os.W_OK),
-                }
-                for node in device.nodes
-            ],
+            "nodes": [node_entry(node) for node in device.nodes],
             "drivers": [driver.name for driver in drivers],
             "attempts": [],
         }

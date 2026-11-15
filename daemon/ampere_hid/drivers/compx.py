@@ -118,10 +118,7 @@ class CompxDriver(Driver):
 
         for node in nodes:
             if not can_access(node):
-                warn_permission(
-                    node.path,
-                    "run `ampere-hid install --udev`",
-                )
+                warn_permission(node)
                 continue
             battery = read_node(node, timeout=FAST_TIMEOUT if quick else TIMEOUT)
             if battery:

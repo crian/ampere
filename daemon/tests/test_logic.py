@@ -15,7 +15,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from ampere_hid import grace, sweep, uevent  # noqa: E402
 from ampere_hid.drivers import compx, find_driver, lamzu, matching_drivers  # noqa: E402
-from ampere_hid.hidraw import HidDevice, HidNode  # noqa: E402
+from ampere_hid.hidraw import HidDevice, HidNode, access_help  # noqa: E402
 
 
 def make_device(vendor, product, uniq="", phys=""):
@@ -205,6 +205,20 @@ class SilentPathsTests(unittest.TestCase):
         device.add_node(HidNode("/dev/hidraw-asleep", 0x373B, 0x11FE, "b", "", 0))
         with mock.patch.object(sweep, "can_access", return_value=False):
             self.assertEqual(sweep.silent_paths([device], {}), [])
+
+
+class AccessHelpTests(unittest.TestCase):
+    def test_a_listed_product_points_at_the_installer(self):
+        node = HidNode("/dev/hidraw-test", 0x373B, 0x11FE, "x", "", 0)
+        reason, hint = access_help(node)
+        self.assertIn("missing or outdated", reason)
+        self.assertIn("install --udev", hint)
+
+    def test_an_unknown_product_says_the_table_is_missing(self):
+        node = HidNode("/dev/hidraw-test", 0x373B, 0x1271, "x", "", 0)
+        reason, hint = access_help(node)
+        self.assertIn("373b:1271 is not in the udev table", reason)
+        self.assertIn("udev.py", hint)
 
 
 class DeviceKeyTests(unittest.TestCase):

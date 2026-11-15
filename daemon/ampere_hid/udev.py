@@ -127,3 +127,8 @@ def render_rules():
 
 def vendor_ids():
     return {vendor for _, _, ids in GROUPS for vendor, _ in ids}
+
+
+def product_ids():
+    """Every (vendor, product) pair that the rule grants access to."""
+    return frozenset(pair for _, _, ids in GROUPS for pair in ids)
