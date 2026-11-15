@@ -181,7 +181,7 @@ class LamzuOfflineTests(unittest.TestCase):
                                   side_effect=answers) as aurora:
             self.assertEqual(driver.read(device), (80, 0))
             self.assertIsNone(driver.read(device))
-        aurora.assert_called_with(device.nodes[0], True)
+        aurora.assert_called_with(device.nodes[0], True, False)
 
 
 class SilentPathsTests(unittest.TestCase):
@@ -219,6 +219,69 @@ class AccessHelpTests(unittest.TestCase):
         reason, hint = access_help(node)
         self.assertIn("373b:1271 is not in the udev table", reason)
         self.assertIn("udev.py", hint)
+
+
+class LamzuBackoffTests(unittest.TestCase):
+    """A silent Lamzu receiver must not cost a full probe every sweep."""
+
+    def setUp(self):
+        self.device = HidDevice("lamzu-test", "test device")
+        for interface in (0, 1, 2):
+            self.device.add_node(
+                HidNode(
+                    f"/dev/hidraw-test{interface}",
+                    0x373E,
+                    0x001E,
+                    "test device",
+                    "",
+                    interface,
+                )
+            )
+        self.driver = lamzu.LamzuDriver()
+        self.compx_calls = []
+        self.aurora_calls = []
+
+    def read_compx(self, node, timeout=compx.TIMEOUT):
+        self.compx_calls.append(timeout)
+        return None
+
+    def read_aurora(self, node, trust_offline=False, quick=False):
+        self.aurora_calls.append(quick)
+        return None, False
+
+    def patch(self):
+        return (
+            mock.patch.object(lamzu, "can_access", return_value=True),
+            mock.patch.object(compx, "read_node", side_effect=self.read_compx),
+            mock.patch.object(
+                lamzu, "aurora_read_node", side_effect=self.read_aurora
+            ),
+        )
+
+    def test_two_full_sweeps_then_short_ones(self):
+        patches = self.patch()
+        with patches[0], patches[1], patches[2]:
+            for _ in range(lamzu.FAILURES_BEFORE_FAST):
+                self.assertIsNone(self.driver.read(self.device))
+            self.assertTrue(all(t == compx.TIMEOUT for t in self.compx_calls))
+            self.assertFalse(any(self.aurora_calls))
+            self.compx_calls.clear()
+            self.aurora_calls.clear()
+            self.assertIsNone(self.driver.read(self.device))
+        self.assertEqual(len(self.compx_calls), 3)
+        self.assertTrue(all(t == lamzu.FAST_TIMEOUT for t in self.compx_calls))
+        self.assertEqual(self.aurora_calls, [True, True, True])
+
+    def test_a_full_probe_comes_back(self):
+        patches = self.patch()
+        with patches[0], patches[1], patches[2]:
+            for _ in range(lamzu.FULL_PROBE_EVERY):
+                self.driver.read(self.device)
+            self.compx_calls.clear()
+            self.aurora_calls.clear()
+            self.driver.read(self.device)
+        self.assertTrue(all(t == compx.TIMEOUT for t in self.compx_calls))
+        self.assertFalse(any(self.aurora_calls))
 
 
 class StatusRenderTests(unittest.TestCase):

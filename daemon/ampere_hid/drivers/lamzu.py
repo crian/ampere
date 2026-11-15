@@ -23,6 +23,13 @@ AURORA = "aurora"
 # First byte of the new protocol's answer: reachable, or not.
 AURORA_ONLINE = 0xA1
 AURORA_OFFLINE = 0xA0
+# A receiver without a mouse answers nothing, and a full probe of both
+# transports on every node costs a couple of seconds. After repeated misses the
+# driver retries with shorter windows and looks properly again every few sweeps.
+FAST_TIMEOUT = 0.12
+FAST_REPEATS = 2
+FAILURES_BEFORE_FAST = 2
+FULL_PROBE_EVERY = 5
 
 
 def build_aurora_battery_packet(new_protocol=True):
@@ -70,7 +77,7 @@ def parse_aurora_battery_response(resp):
     return level, state
 
 
-def aurora_query(node):
+def aurora_query(node, repeats=6):
     """Ask with the new protocol and return its first frame, or ``None``.
 
     The first byte tells whether the mouse is reachable: ``0xA1`` means yes and
@@ -83,7 +90,7 @@ def aurora_query(node):
             hid.flush()
             if not hid.send(packet):
                 return None
-            for _ in range(6):
+            for _ in range(repeats):
                 time.sleep(0.02)
                 raw = hid.read_feature(REPORT_SIZE, 0x00)
                 if not raw:
@@ -97,7 +104,7 @@ def aurora_query(node):
     return None
 
 
-def aurora_read_node(node, trust_offline=False):
+def aurora_read_node(node, trust_offline=False, quick=False):
     """Query the battery over the Aurora transport.
 
     Returns ``(reading, online)``. ``online`` is true when the new protocol
@@ -109,9 +116,10 @@ def aurora_read_node(node, trust_offline=False):
     that does not know the new protocol keeps working.
     """
     offline = False
+    repeats = FAST_REPEATS if quick else 6
     # New protocol twice: a sleeping mouse occasionally drops the first request.
-    for _ in range(2):
-        answer = aurora_query(node)
+    for _ in range(1 if quick else 2):
+        answer = aurora_query(node, repeats)
         if answer is None:
             continue
         if answer[0] == AURORA_OFFLINE:
@@ -125,7 +133,10 @@ def aurora_read_node(node, trust_offline=False):
         return None, False
 
     battery = query_feature(
-        node, build_aurora_battery_packet(False), parse_aurora_battery_response
+        node,
+        build_aurora_battery_packet(False),
+        parse_aurora_battery_response,
+        repeats=repeats,
     )
     return battery, False
 
@@ -143,6 +154,8 @@ class LamzuDriver(Driver):
         # Only for those does 0xA0 mean "the mouse is off" instead of "try the
         # legacy query", which would return the receiver's cached value.
         self._online = set()
+        # Sweeps in a row without a reading, for the short probe.
+        self._failures = {}
 
     def _transports(self, key):
         order = [COMPX, AURORA]
@@ -154,6 +167,12 @@ class LamzuDriver(Driver):
 
     def read(self, device):
         key = device.key
+        failures = self._failures.get(key, 0)
+        quick = (
+            failures >= FAILURES_BEFORE_FAST
+            and failures % FULL_PROBE_EVERY != 0
+        )
+
         for node in device.sorted_nodes(self.preferred_interfaces):
             if not can_access(node):
                 warn_permission(node)
@@ -161,12 +180,19 @@ class LamzuDriver(Driver):
 
             for transport in self._transports(key):
                 if transport == COMPX:
-                    battery = compx.read_node(node)
+                    battery = compx.read_node(
+                        node, timeout=FAST_TIMEOUT if quick else compx.TIMEOUT
+                    )
                 else:
-                    battery, online = aurora_read_node(node, key in self._online)
+                    battery, online = aurora_read_node(
+                        node, key in self._online, quick
+                    )
                     if online:
                         self._online.add(key)
                 if battery:
                     self._preferred[key] = transport
+                    self._failures[key] = 0
                     return battery
+
+        self._failures[key] = failures + 1
         return None

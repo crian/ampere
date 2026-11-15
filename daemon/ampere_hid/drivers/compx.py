@@ -109,7 +109,10 @@ class CompxDriver(Driver):
     def read(self, device):
         key = device.key
         failures = self._failures.get(key, 0)
-        quick = failures >= FAILURES_BEFORE_FAST and failures % FULL_PROBE_EVERY
+        quick = (
+            failures >= FAILURES_BEFORE_FAST
+            and failures % FULL_PROBE_EVERY != 0
+        )
 
         nodes = device.sorted_nodes(self.preferred_interfaces)
         known = self._node.get(key)
