@@ -191,6 +191,16 @@ CI compiles the schema, runs these tests, lints Python and JavaScript, builds
 the single-file `ampere-hid` and runs it, and builds the extension package to
 check that it contains only extension files.
 
+## Releasing
+
+Push a tag. `v<version-name>` (for example `v1.2`) releases both sides: the
+workflow builds the extension package for EGO and attaches it with `ampere-hid`
+to the GitHub release. A patch tag such as `v1.1.1` leaves `version-name` alone
+and releases only the service, for fixes that need no extension upload.
+
+The changelog entry uses the tag as its heading; the release notes are taken
+from it.
+
 ## Commit messages
 
 Use [Conventional Commits](https://www.conventionalcommits.org/), so the

@@ -13,13 +13,28 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # A tag that matches version-name ships the extension too; a patch tag
+      # such as v1.1.1 (version-name stays 1.1) ships only the service.
+      - name: Decide what this release contains
+        id: kind
+        run: |
+          version_name=$(python3 -c \
+            'import json; print(json.load(open("metadata.json"))["version-name"])')
+          if [ "v$version_name" = "$GITHUB_REF_NAME" ]; then
+            echo "extension=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "extension=false" >> "$GITHUB_OUTPUT"
+          fi
+
       # gnome-extensions packaging comes with gnome-shell.
       - name: Install packaging tools
+        if: steps.kind.outputs.extension == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends gnome-shell
 
       - name: Build extension package
+        if: steps.kind.outputs.extension == 'true'
         run: |
           glib-compile-schemas schemas/
           gnome-extensions pack --force \
@@ -28,6 +43,7 @@ jobs:
             --extra-source=LICENSE
 
       - name: Check package contents
+        if: steps.kind.outputs.extension == 'true'
         run: |
           unzip -l ampere@crian.shell-extension.zip
           if unzip -l ampere@crian.shell-extension.zip \
@@ -59,10 +75,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            ./ampere@crian.shell-extension.zip \
-            ./ampere-hid \
-            ./ampere-hid.sha256 \
+          files=(./ampere-hid ./ampere-hid.sha256)
+          if [ "${{ steps.kind.outputs.extension }}" = "true" ]; then
+            files+=(./ampere@crian.shell-extension.zip)
+          fi
+          gh release create "$GITHUB_REF_NAME" "${files[@]}" \
             --verify-tag \
             --title "$GITHUB_REF_NAME" \
             --notes-file notes.md
