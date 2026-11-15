@@ -82,6 +82,8 @@ GROUPS = (
             (0x3837, 0x1001),
             (0x3837, 0x100A),
             (0x3837, 0x100B),
+            # The A7 V2 Pro on its cable enumerates with this product ID.
+            (0x3837, 0x4018),
             (0x5253, 0x0031),
             (0x5253, 0x1020),
         ),
