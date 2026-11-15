@@ -90,9 +90,9 @@ def aurora_query(node, repeats=6):
                 raw = hid.read_feature(REPORT_SIZE, 0x00)
                 if not raw:
                     continue
-                if len(raw) >= 2 and raw[0] == 0x00:
+                if raw[0] == 0x00:
                     raw = raw[1:]
-                if raw[0] in (AURORA_ONLINE, AURORA_OFFLINE):
+                if raw and raw[0] in (AURORA_ONLINE, AURORA_OFFLINE):
                     return raw
     except OSError:
         return None
