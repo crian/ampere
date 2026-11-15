@@ -82,12 +82,24 @@ export default class AmperePrefs extends ExtensionPreferences {
         settings.bind('vendor-hid-enabled', vendorRow, 'active', Gio.SettingsBindFlags.DEFAULT);
         vendor.add(vendorRow);
 
-        // Always present, shown only while the service is missing.
+        // Shown only while the service is missing. The command is copied to the
+        // clipboard here, never executed from the extension.
+        const installCommand =
+            'git clone https://github.com/crian/ampere && cd ampere && ./daemon/install.sh --udev';
+        const copyButton = new Gtk.Button({
+            icon_name: 'edit-copy-symbolic',
+            valign: Gtk.Align.CENTER,
+            tooltip_text: _('Copy the command'),
+            css_classes: ['flat'],
+        });
+        copyButton.connect('clicked', () => copyButton.get_clipboard().set(installCommand));
+
         const warning = new Adw.ActionRow({
             title: _('Companion service not running'),
-            subtitle: _('Install the Ampere HID daemon (see README)'),
+            subtitle: installCommand,
             visible: false,
         });
+        warning.add_suffix(copyButton);
         vendor.add(warning);
         const serviceWarning = ok => {
             warning.visible = !ok;
