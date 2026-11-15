@@ -114,8 +114,9 @@ export default class AmperePrefs extends ExtensionPreferences {
         warning.add_suffix(copyButton);
         vendor.add(warning);
         // version: undefined = not asked, null = no Version property yet.
+        const extensionVersion = this.metadata?.['version-name'] ?? 'dev';
         const serviceWarning = (ok, version) => {
-            const outdated = ok && daemonTooOld(version);
+            const outdated = ok && daemonTooOld(version, extensionVersion);
             if (!outdated) {
                 warning.title = _('Companion service not running');
             } else if (version) {

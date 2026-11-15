@@ -11,9 +11,6 @@ export const HID_BATTERY_BUS_NAME = 'org.gnome.shell.extensions.ampere.HidBatter
 export const HID_BATTERY_OBJECT_PATH = '/org/gnome/shell/extensions/ampere/HidBattery';
 export const HID_BATTERY_IFACE = 'org.gnome.shell.extensions.ampere.HidBattery';
 
-// Oldest service this extension works with; raise it when a newer one is needed.
-export const MIN_DAEMON_VERSION = '1.1.1';
-
 const STATE_BY_PROTOCOL = {
     0: STATE.DISCHARGING,
     1: STATE.CHARGING,
@@ -86,19 +83,21 @@ export async function readHidVersion(cancellable) {
 }
 
 /**
- * True when the version is older than MIN_DAEMON_VERSION; null counts as older,
- * 'dev' and unknown values never do.
+ * True when the version is older than the one the extension needs; null counts
+ * as older, 'dev' and unknown values never do.
  */
-export function daemonTooOld(version) {
+export function daemonTooOld(version, required) {
     if (version === null)
         return true;
     if (typeof version !== 'string' || version === 'dev')
+        return false;
+    if (typeof required !== 'string' || required === 'dev')
         return false;
 
     const have = version.split('.').map(n => parseInt(n, 10));
     if (have.some(Number.isNaN))
         return false;
-    const want = MIN_DAEMON_VERSION.split('.').map(n => parseInt(n, 10));
+    const want = required.split('.').map(n => parseInt(n, 10));
     for (let i = 0; i < want.length; i++) {
         const part = have[i] ?? 0;
         if (part !== want[i])

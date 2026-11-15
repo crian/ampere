@@ -103,6 +103,8 @@ Design notes:
   once, and the readings of the devices that did answer are published before it.
 * A device without an answer keeps its last reading for three sweeps before it
   disappears.
+* The service reports its version; the preferences compare it with their own
+  `version-name` and point at the install command when it is older.
 * A driver only sends battery query commands; it never changes device settings.
   Do not add configuration, EEPROM or firmware writes.
 
@@ -198,7 +200,7 @@ check that it contains only extension files.
 
 Push a tag. `v<version-name>` (for example `v1.2`) releases both sides: the
 workflow builds the extension package for EGO and attaches it with `ampere-hid`
-to the GitHub release. A patch tag such as `v1.1.1` leaves `version-name` alone
+to the GitHub release. A patch tag such as `v1.2.1` leaves `version-name` alone
 and releases only the service, for fixes that need no extension upload.
 
 The changelog entry uses the tag as its heading; the release notes are taken
