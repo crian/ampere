@@ -3,6 +3,7 @@
 import Adw from 'gi://Adw';
 import Gdk from 'gi://Gdk';
 import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk';
 
 import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
@@ -85,18 +86,26 @@ export default class AmperePrefs extends ExtensionPreferences {
         // Shown only while the service is missing. The command is copied to the
         // clipboard here, never executed from the extension.
         const installCommand =
-            'git clone https://github.com/crian/ampere && cd ampere && ./daemon/install.sh --udev';
+            'cd "$(mktemp -d)" && curl -fsSLo ampere-hid ' +
+            'https://github.com/crian/ampere/releases/latest/download/ampere-hid ' +
+            '&& chmod +x ampere-hid && ./ampere-hid install --udev';
         const copyButton = new Gtk.Button({
             icon_name: 'edit-copy-symbolic',
             valign: Gtk.Align.CENTER,
             tooltip_text: _('Copy the command'),
             css_classes: ['flat'],
         });
-        copyButton.connect('clicked', () => copyButton.get_clipboard().set(installCommand));
+        copyButton.connect('clicked', () => {
+            const bytes = new GLib.Bytes(new TextEncoder().encode(installCommand));
+            copyButton.get_clipboard().set_content(
+                Gdk.ContentProvider.new_for_bytes('text/plain;charset=utf-8', bytes));
+        });
 
         const warning = new Adw.ActionRow({
             title: _('Companion service not running'),
             subtitle: installCommand,
+            // The command contains "&&" and "$(", which are not valid Pango markup.
+            use_markup: false,
             visible: false,
         });
         warning.add_suffix(copyButton);

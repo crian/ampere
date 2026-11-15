@@ -4,6 +4,7 @@ __pycache__/
 
 # Build artifacts
 *.zip
+/ampere-hid
 schemas/gschemas.compiled
 
 # Editors and temporary files
