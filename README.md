@@ -53,8 +53,9 @@ chmod +x ampere-hid
 ./ampere-hid install --udev
 ```
 
-To check the download first, fetch `ampere-hid.sha256` from the same release
-and run `sha256sum -c ampere-hid.sha256` next to the file.
+To check the download, fetch `ampere-hid.sha256` from the same release and run
+`sha256sum -c ampere-hid.sha256` next to the file. That catches a broken or
+truncated download; it does not prove that the release itself is genuine.
 
 This is a one-time command for you to run. The extension never downloads or
 executes anything itself; it only talks to the service over D-Bus.
@@ -83,6 +84,12 @@ ampere-hid uninstall          # add --udev to remove the udev rule as well
 
 From a checkout, use `python3 -m ampere_hid install` from the `daemon/`
 directory instead; it builds the same single file.
+
+On NixOS, take the output of `ampere-hid rules` into
+`services.udev.extraRules`; the service itself has to be packaged (for example
+a home-manager module), which is out of scope here. Without systemd, `install`
+still writes the files but starts nothing: run `ampere-hid run` from your
+session startup instead.
 
 ### Supported devices
 
