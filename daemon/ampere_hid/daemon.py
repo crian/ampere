@@ -13,15 +13,9 @@ session bus:
 The extension never spawns this; D-Bus activation or the systemd user unit
 starts it on demand.
 
-Without D-Bus:
-
-  python3 -m ampere_hid --once       read the battery once
-  python3 -m ampere_hid --probe      list devices and their driver
-  python3 -m ampere_hid --diagnose   devices, driver and raw answers
-  python3 -m ampere_hid --sniff [s]  passively dump input reports
+Without D-Bus, see ``ampere-hid --help`` (once, probe, diagnose, sniff).
 """
 
-import contextlib
 import json
 import os
 import signal
@@ -40,20 +34,10 @@ except (ImportError, ValueError):
     GLibUnix = None
 
 from . import grace  # noqa: E402
-from .drivers import find_driver, matching_drivers  # noqa: E402
-from .hidraw import (  # noqa: E402
-    HidHandle,
-    can_access,
-    enumerate_nodes,
-    group_nodes,
-    log,
-    wait_for_activity,
-)
-from .sweep import query_all, read_devices  # noqa: E402
+from .hidraw import can_access, log, wait_for_activity  # noqa: E402
+from .names import BUS_NAME, IFACE, OBJECT_PATH  # noqa: E402
+from .sweep import read_devices  # noqa: E402
 
-BUS_NAME = "org.gnome.shell.extensions.ampere.HidBattery"
-OBJECT_PATH = "/org/gnome/shell/extensions/ampere/HidBattery"
-IFACE = "org.gnome.shell.extensions.ampere.HidBattery"
 POLL_SECONDS = 30
 # While a supported receiver is present but does not answer (the mouse is
 # asleep), the daemon waits for input reports instead of polling: a sleeping
@@ -95,99 +79,6 @@ INTROSPECTION_XML = """
   </interface>
 </node>
 """
-
-
-def probe():
-    """Describe all hidraw devices and their matching driver, without querying."""
-    devices = group_nodes(enumerate_nodes())
-    result = []
-    for device in devices:
-        driver = find_driver(device)
-        result.append(
-            {
-                "key": device.key,
-                "name": device.name,
-                "driver": driver.name if driver else None,
-                "kind": driver.kind if driver else None,
-                "nodes": [
-                    {
-                        "path": node.path,
-                        "vendor": f"{node.vendor:04x}",
-                        "product": f"{node.product:04x}",
-                        "interface": node.interface,
-                    }
-                    for node in device.nodes
-                ],
-            }
-        )
-    return result
-
-
-def sniff(seconds=3.0):
-    """Passively dump input reports from every accessible hidraw node.
-
-    Read-only: nothing is written to any device. Useful for devices that push
-    their status on their own.
-    """
-    result = []
-    for device in group_nodes(enumerate_nodes()):
-        for node in device.nodes:
-            reports = []
-            try:
-                with HidHandle(node.path) as hid:
-                    hid.flush()
-                    deadline = time.time() + seconds
-                    while time.time() < deadline:
-                        data = hid.read_input(timeout=0.2)
-                        if data:
-                            reports.append(data.hex(" "))
-            except OSError as e:
-                reports.append(f"error: {e}")
-            result.append(
-                {
-                    "name": device.name,
-                    "path": node.path,
-                    "interface": node.interface,
-                    "reports": reports,
-                }
-            )
-    return result
-
-
-def diagnose():
-    """Explain every hidraw device, its driver and the raw answers."""
-    result = []
-    for device in group_nodes(enumerate_nodes()):
-        drivers = matching_drivers(device)
-        entry = {
-            "key": device.key,
-            "name": device.name,
-            "nodes": [
-                {
-                    "path": node.path,
-                    "vendor": f"{node.vendor:04x}",
-                    "product": f"{node.product:04x}",
-                    "interface": node.interface,
-                    "accessible": os.access(node.path, os.R_OK | os.W_OK),
-                }
-                for node in device.nodes
-            ],
-            "drivers": [driver.name for driver in drivers],
-            "attempts": [],
-        }
-        for driver in drivers:
-            try:
-                battery = driver.read(device)
-            except Exception as e:  # a broken driver must not abort the report
-                battery = f"error: {e}"
-            entry["attempts"].append(
-                {
-                    "driver": driver.name,
-                    "result": list(battery) if isinstance(battery, tuple) else battery,
-                }
-            )
-        result.append(entry)
-    return result
 
 
 class Daemon:
@@ -307,37 +198,15 @@ def quit_handler(loop):
 
 
 def add_unix_signal(signum, handler):
-    if GLibUnix is not None:
+    # GLibUnix.signal_add replaces the deprecated GLib.unix_signal_add, but
+    # older GLib versions ship GLibUnix without it.
+    if GLibUnix is not None and hasattr(GLibUnix, "signal_add"):
         return GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signum, handler)
     return GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signum, handler)
 
 
-def main(argv):
-    if "--probe" in argv:
-        print(json.dumps({"devices": probe()}, indent=2))
-        return 0
-
-    if "--sniff" in argv:
-        seconds = 3.0
-        index = argv.index("--sniff")
-        if index + 1 < len(argv):
-            with contextlib.suppress(ValueError):
-                seconds = float(argv[index + 1])
-        print(json.dumps({"nodes": sniff(seconds)}, indent=2))
-        return 0
-
-    if "--diagnose" in argv:
-        print(json.dumps({"devices": diagnose()}, indent=2))
-        return 0
-
-    if "--once" in argv:
-        items, matched = query_all()
-        print(json.dumps({"devices": items}, separators=(",", ":")))
-        if matched and not items:
-            log("supported device found, no battery answer (asleep?)")
-            return 1
-        return 0
-
+def run():
+    """Own the bus name and serve until asked to quit or idle."""
     loop = GLib.MainLoop()
     daemon = Daemon(loop)
     Gio.bus_own_name(

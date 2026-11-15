@@ -5,7 +5,7 @@ Adding a mouse:
 
 1. Add a module here with a ``Driver`` subclass.
 2. Append an instance to ``DRIVERS``.
-3. Add its VID/PID to ``daemon/70-ampere-hid.rules``.
+3. Add its VID/PID to ``GROUPS`` in ``ampere_hid/udev.py``.
 4. Document whether it was tested on real hardware.
 
 Order matters: a device is handled by the first matching driver. The Lamzu

@@ -101,7 +101,7 @@ class LamzuDriver(Driver):
             if not can_access(node):
                 warn_permission(
                     node.path,
-                    "install daemon/70-ampere-hid.rules and reload udev",
+                    "run `ampere-hid install --udev`",
                 )
                 continue
 
