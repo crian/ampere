@@ -42,40 +42,44 @@ Log out and back in afterwards; Wayland cannot reload the shell in place.
 This part is only needed for mice that are not in UPower, for example a Lamzu
 Maya X, an MCHOSE A7 V2 Pro or an ATK A9. Everything else works without it.
 
-1. Install the udev rule so your user may access the HID devices. This needs
-   root and is a one-time step:
-
-   ```sh
-   sudo install -m644 daemon/70-ampere-hid.rules /etc/udev/rules.d/
-   sudo udevadm control --reload-rules
-   sudo udevadm trigger --subsystem-match=hidraw
-   ```
-
-   The rules name exact product IDs, so other devices on the same chip
-   (keyboards, for example) stay untouched. If your model is missing, add its
-   ID from `lsusb`.
-
-2. Install the service:
-
-   ```sh
-   ./daemon/install.sh
-   ```
-
-   The script offers to install the udev rule as well; `--udev` answers that
-   question up front. Either way it needs `sudo`.
-
-3. Turn on "Vendor HID battery" in the extension preferences.
-
-This writes `~/.local/lib/ampere/`, a systemd user unit and a D-Bus activation
-file. The unit is not enabled at login; activation starts it when the extension
-asks, and it exits after five minutes without requests
-(`AMPERE_HID_IDLE_EXIT`, `0` disables). To remove it again:
+The companion service is a single file. Download `ampere-hid` from the
+[latest release](https://github.com/crian/ampere/releases/latest) and run its
+installer (the file is attached to releases from v1.1 on):
 
 ```sh
-./daemon/uninstall.sh
+curl -fsSLo ampere-hid \
+  https://github.com/crian/ampere/releases/latest/download/ampere-hid
+chmod +x ampere-hid
+./ampere-hid install --udev
 ```
 
-The udev rule has to be deleted by hand, since it belongs to root.
+This is a one-time command for you to run. The extension never downloads or
+executes anything itself; it only talks to the service over D-Bus.
+
+Then turn on "Vendor HID battery" in the extension preferences.
+
+`install` copies the program to `~/.local/bin/ampere-hid` and writes a systemd
+user unit and a D-Bus activation file. The unit is not enabled at login;
+activation starts it when the extension asks, and it exits after five minutes
+without requests (`AMPERE_HID_IDLE_EXIT`, `0` disables).
+
+`--udev` also installs the udev rule that lets your user access the HID
+devices. That needs root (`sudo`, or `pkexec` without a terminal) and is a
+one-time step. Without the flag, `install` asks when the rule is missing or out
+of date; `--no-udev` skips the question. The rule names exact product IDs, so
+other devices on the same chip (keyboards, for example) stay untouched. If your
+model is missing, see [CONTRIBUTING.md](CONTRIBUTING.md); to try a model on your
+own machine, put a rule for it into a separate file in `/etc/udev/rules.d/`,
+because the generated one is overwritten on update.
+
+To remove everything again:
+
+```sh
+ampere-hid uninstall          # add --udev to remove the udev rule as well
+```
+
+From a checkout, use `python3 -m ampere_hid install` from the `daemon/`
+directory instead; it builds the same single file.
 
 ### Supported devices
 
@@ -90,13 +94,14 @@ The udev rule has to be deleted by hand, since it belongs to root.
 | Other MCHOSE receivers (`3837`, `5253`) | MCHOSE feature query | not tested |
 
 Only the rows marked "yes" were checked on real hardware. If your model is
-missing, run the command below. Also check whether its product ID is listed in
-`daemon/70-ampere-hid.rules`; if it is not, add the VID:PID that `lsusb` shows.
+missing, run the command below. Also check whether its product ID is in the
+output of `ampere-hid rules`; if it is not, the VID:PID that `lsusb` shows has
+to be added (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 
 ### If a device does not show up
 
 ```sh
-python3 ~/.local/lib/ampere/ampere-hid --diagnose
+ampere-hid diagnose
 ```
 
 It shows every hidraw device, its driver and the raw answer. It only sends
@@ -113,7 +118,7 @@ hide the vendor devices instead.
 
 * GNOME Shell 48–51
 * Nothing extra for the extension itself
-* For the optional service: Python 3 with PyGObject (`python3-gi`)
+* For the optional service: Python 3.8 or newer with PyGObject (`python3-gi`)
 
 ## Contributing
 

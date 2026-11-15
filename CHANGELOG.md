@@ -15,6 +15,6 @@ First release.
   MCHOSE A7 V2 Pro
 - Level colours follow the Adwaita palette (success, warning, error, accent)
 
-The companion service is installed separately with `daemon/install.sh`. The
+The companion service is installed separately (see the README). The
 extension itself works without it for everything UPower reports, and the EGO
 package contains no daemon code.

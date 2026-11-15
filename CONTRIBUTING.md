@@ -14,19 +14,23 @@ stylesheet.css      panel and hover-card styling
 schemas/            GSettings schema (the compiled file is generated)
 
 daemon/
-  ampere-hid        entry point of the installed service
-  ampere_hid/
-    daemon.py       D-Bus service, cache, scheduling
+  ampere_hid/       the package; released as the single file `ampere-hid`
+    cli.py          subcommands: run, once, probe, diagnose, sniff, rules, ...
+    daemon.py       D-Bus service, cache, scheduling (the only part needing gi)
+    sweep.py        one pass over all devices
     hidraw.py       device enumeration, HID report helpers
+    tools.py        probe, sniff, diagnose (no gi needed)
+    install.py      install/uninstall: program, systemd unit, D-Bus file, udev
+    udev.py         product IDs that get hidraw access; renders the rule
+    archive.py      builds the single-file program (a zipapp)
+    names.py        bus name and object path
     drivers/
       base.py       Driver interface
       lamzu.py      Lamzu (Aurora + Compx)
       compx.py      ATK/VXE/VGN and other Compx silicon
       mchose.py     MCHOSE (RealTek)
       __init__.py   driver registry
-  tests/            parser tests, no hardware needed
-  70-ampere-hid.rules
-  install.sh / uninstall.sh
+  tests/            parser, sweep and installer tests, no hardware needed
 ```
 
 ## Building and running
@@ -56,12 +60,14 @@ ln -s "$PWD" ~/.local/share/gnome-shell/extensions/ampere@crian
 In that case `schemas/gschemas.compiled` has to exist, because the shell loads
 the schema straight from that directory.
 
-Control the companion service with:
+The companion service is built and installed from the checkout with:
 
 ```sh
-./daemon/install.sh
+cd daemon
+python3 -m ampere_hid install      # builds the single file and installs it
 systemctl --user status ampere-hid
 journalctl --user -u ampere-hid -f
+python3 -m ampere_hid build ../ampere-hid   # only build, for a release
 ```
 
 ## The companion service
@@ -97,24 +103,25 @@ Design notes:
 
 ## Debugging without D-Bus
 
-Run from the `daemon/` directory, or use `~/.local/lib/ampere/ampere-hid`:
+Run from the `daemon/` directory, or use the installed `ampere-hid`:
 
 ```sh
-python3 -m ampere_hid --probe      # hidraw devices, VID/PID, interface, driver
-python3 -m ampere_hid --once       # read the battery once
-python3 -m ampere_hid --diagnose   # devices, matching drivers and raw answers
-python3 -m ampere_hid --sniff 3    # passively dump input reports for 3 s
+python3 -m ampere_hid probe      # hidraw devices, VID/PID, interface, driver
+python3 -m ampere_hid once       # read the battery once
+python3 -m ampere_hid diagnose   # devices, matching drivers and raw answers
+python3 -m ampere_hid sniff 3    # passively dump input reports for 3 s
+python3 -m ampere_hid rules      # the udev rule that install --udev writes
 ```
 
-`--probe` and `--sniff` do not talk to the device; `--diagnose` sends the
-battery query. None of them changes a setting. `--sniff` finds devices that
-push their status instead of answering a query.
+`probe` and `sniff` do not talk to the device; `diagnose` sends the battery
+query. None of them changes a setting. `sniff` finds devices that push their
+status instead of answering a query. None of these needs PyGObject.
 
 ## Adding a device
 
 1. Check whether UPower already knows the device (`upower -e`,
    `ls /sys/class/power_supply/`). If it does, nothing needs to be added.
-2. Inspect the hidraw nodes with `--probe`: VID/PID, interface numbers and
+2. Inspect the hidraw nodes with `probe`: VID/PID, interface numbers and
    whether a driver already claims the device.
 3. Work out the protocol, e.g. from the vendor tool with USBPcap, or by probing
    feature reports by hand. Only send battery queries, nothing that writes.
@@ -154,15 +161,17 @@ push their status instead of answering a query.
    DRIVERS = [LamzuDriver(), CompxDriver(), MchoseDriver(), MyVendorDriver()]
    ```
 
-6. Add the device's VID:PID to `daemon/70-ampere-hid.rules`. The rules are per
-   product ID on purpose: a vendor-wide rule would also grant access to
-   keyboards and other HID devices on the same chip.
-7. Test with `--probe`, `--diagnose` and `--once`, then add parser tests.
+6. Add the device's VID:PID to `GROUPS` in `daemon/ampere_hid/udev.py`; the
+   udev rule is generated from it. The rules are per product ID on purpose: a
+   vendor-wide rule would also grant access to keyboards and other HID devices
+   on the same chip. A test fails when a vendor ID there belongs to no driver.
+7. Test with `probe`, `diagnose` and `once`, then add parser tests.
 8. Note in the README table whether it was verified on real hardware.
 
 ## Tests
 
-The protocol parsers are covered without hardware:
+The protocol parsers, the sweep and the installer are covered without
+hardware (the installer tests use a temporary home and a fake `systemctl`):
 
 ```sh
 cd daemon && python3 -m unittest discover -s tests -v
@@ -172,9 +181,9 @@ Please add a case for every new report layout, including the "no answer" and
 "out of range" variants. Those are what keep a sleeping mouse from showing a
 bogus percentage.
 
-CI compiles the schema, runs these tests, lints Python, JavaScript and shell,
-and builds the extension package to check that it contains only extension
-files.
+CI compiles the schema, runs these tests, lints Python and JavaScript, builds
+the single-file `ampere-hid` and runs it, and builds the extension package to
+check that it contains only extension files.
 
 ## Commit messages
 
