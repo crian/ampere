@@ -47,7 +47,8 @@ NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=read-only
 PrivateTmp=yes
-RestrictAddressFamilies=AF_UNIX
+# AF_NETLINK is the uevent socket; the daemon needs no other network family.
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
 
 [Install]
 WantedBy=default.target

@@ -37,6 +37,7 @@ from . import __version__, grace  # noqa: E402
 from .hidraw import can_access, log, wait_for_activity  # noqa: E402
 from .names import BUS_NAME, IFACE, OBJECT_PATH  # noqa: E402
 from .sweep import read_devices  # noqa: E402
+from .uevent import mentions_hidraw, open_monitor  # noqa: E402
 
 POLL_SECONDS = 30
 # While a supported receiver is present but does not answer (the mouse is
@@ -96,7 +97,9 @@ class Daemon:
         self._last = {}
         self._misses = {}
         self._polling = False
+        self._poll_again = False
         self._timer = 0
+        self._monitor = None
         self._last_call = time.monotonic()
 
     def _set_payload(self, items):
@@ -124,6 +127,7 @@ class Daemon:
     def request_poll(self):
         """Start a sweep in the background, unless one is already running."""
         if self._polling:
+            self._poll_again = True
             return
         self._polling = True
         threading.Thread(target=self._worker, daemon=True, name="ampere-hid-poll").start()
@@ -151,6 +155,9 @@ class Daemon:
     def _apply_failed(self):
         self._polling = False
         self._schedule()
+        if self._poll_again:
+            self._poll_again = False
+            self.request_poll()
         return GLib.SOURCE_REMOVE
 
     def _apply(self, matched, fresh):
@@ -164,7 +171,32 @@ class Daemon:
 
         self._set_payload(items)
         self._schedule()
+        if self._poll_again:
+            self._poll_again = False
+            self.request_poll()
         return GLib.SOURCE_REMOVE
+
+    def _watch_uevents(self):
+        """Read hidraw add/remove events instead of waiting for the timer."""
+        try:
+            self._monitor = open_monitor()
+        except OSError as e:
+            log(f"cannot watch udev events, polling only: {e}")
+            return
+        GLib.io_add_watch(
+            self._monitor.fileno(), GLib.PRIORITY_DEFAULT, GLib.IO_IN, self._on_uevent
+        )
+
+    def _on_uevent(self, fd, condition):
+        while True:
+            try:
+                message = self._monitor.recv(8192)
+            except BlockingIOError:
+                return GLib.SOURCE_CONTINUE
+            except OSError:
+                return GLib.SOURCE_REMOVE
+            if mentions_hidraw(message):
+                self.request_poll()
 
     def on_method_call(self, connection, sender, path, iface, method, params, invocation):
         if method == "GetDevices":
@@ -183,6 +215,7 @@ class Daemon:
         self._connection = connection
         # Answer immediately from the (empty) cache; the first sweep follows.
         self._last_call = time.monotonic()
+        self._watch_uevents()
         self.request_poll()
 
     def on_name_lost(self, connection, name):

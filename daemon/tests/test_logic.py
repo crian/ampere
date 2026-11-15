@@ -10,7 +10,7 @@ import unittest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from ampere_hid import grace  # noqa: E402
+from ampere_hid import grace, uevent  # noqa: E402
 from ampere_hid.drivers import find_driver, matching_drivers  # noqa: E402
 from ampere_hid.hidraw import HidDevice, HidNode  # noqa: E402
 
@@ -110,6 +110,22 @@ class GraceTests(unittest.TestCase):
     def test_order_follows_the_matched_devices(self):
         fresh = {"a": {"pct": 1}, "b": {"pct": 2}}
         self.assertEqual(self.apply(["b", "a"], fresh), [{"pct": 2}, {"pct": 1}])
+
+
+class UeventTests(unittest.TestCase):
+    def test_detects_hidraw_events(self):
+        add = b"add@/devices/.../hidraw/hidraw3\x00SUBSYSTEM=hidraw\x00ACTION=add\x00"
+        self.assertTrue(uevent.mentions_hidraw(add))
+        self.assertFalse(
+            uevent.mentions_hidraw(b"add@/devices/.../usb1\x00SUBSYSTEM=usb\x00")
+        )
+
+    def test_monitor_can_be_opened(self):
+        try:
+            sock = uevent.open_monitor()
+        except OSError as e:
+            self.skipTest(f"netlink uevents not available: {e}")
+        sock.close()
 
 
 if __name__ == "__main__":
