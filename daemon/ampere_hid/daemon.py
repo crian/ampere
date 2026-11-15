@@ -100,6 +100,7 @@ class Daemon:
         self._poll_again = False
         self._timer = 0
         self._monitor = None
+        self._retry_id = 0
         self._last_call = time.monotonic()
 
     def _set_payload(self, items):
@@ -188,15 +189,42 @@ class Daemon:
         )
 
     def _on_uevent(self, fd, condition):
+        added = removed = False
         while True:
             try:
                 message = self._monitor.recv(8192)
             except BlockingIOError:
-                return GLib.SOURCE_CONTINUE
+                break
             except OSError:
                 return GLib.SOURCE_REMOVE
-            if mentions_hidraw(message):
-                self.request_poll()
+            if not mentions_hidraw(message):
+                continue
+            added = added or b"ACTION=add" in message
+            removed = removed or b"ACTION=remove" in message
+
+        if removed:
+            self.request_poll()
+        if added:
+            # udev applies the access rule after the kernel event, so the node
+            # is not readable yet; look again shortly instead of after 30 s.
+            self._retry_soon()
+        return GLib.SOURCE_CONTINUE
+
+    RETRY_DELAYS_MS = (300, 1200)
+
+    def _retry_soon(self, attempt=0):
+        """Sweep again after a new device had time to become readable."""
+        if self._retry_id or attempt >= len(self.RETRY_DELAYS_MS):
+            return
+        self._retry_id = GLib.timeout_add(
+            self.RETRY_DELAYS_MS[attempt], self._on_retry, attempt
+        )
+
+    def _on_retry(self, attempt):
+        self._retry_id = 0
+        self.request_poll()
+        self._retry_soon(attempt + 1)
+        return GLib.SOURCE_REMOVE
 
     def on_method_call(self, connection, sender, path, iface, method, params, invocation):
         if method == "GetDevices":
