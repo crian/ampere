@@ -37,6 +37,7 @@ jobs:
           python3 -m ampere_hid build ../ampere-hid
           cd ..
           ./ampere-hid --help
+          test "$(./ampere-hid --version)" = "ampere-hid dev"
           # The built file must carry the full rule set and run on its own.
           test "$(./ampere-hid rules | grep -c uaccess)" -gt 0
 

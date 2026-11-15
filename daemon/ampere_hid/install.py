@@ -18,6 +18,7 @@ import tempfile
 from pathlib import Path
 from typing import NamedTuple
 
+from . import __version__
 from .archive import program_bytes, running_archive
 from .names import BUS_NAME
 from .udev import render_rules
@@ -317,7 +318,7 @@ def install(
 
     name = command_name(target.program)
     print(
-        "Ampere vendor HID battery daemon installed.\n"
+        f"Ampere vendor HID battery daemon {__version__} installed.\n"
         f"\n  {target.program}\n"
         "\nInspect devices and their answers:\n"
         f"  {name} probe      list HID devices and their driver\n"

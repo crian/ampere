@@ -14,6 +14,7 @@ from unittest import mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
+import ampere_hid  # noqa: E402
 from ampere_hid import archive, cli, install, udev  # noqa: E402
 from ampere_hid.drivers import DRIVERS  # noqa: E402
 from ampere_hid.names import BUS_NAME  # noqa: E402
@@ -195,6 +196,25 @@ class ProgramTests(unittest.TestCase):
         self.assertIn("__main__.py", names)
         self.assertFalse([n for n in names if "__pycache__" in n or "tests" in n])
         self.assertTrue(any(re.fullmatch(r"ampere_hid/drivers/lamzu\.py", n) for n in names))
+
+    def test_version_flag_prints_the_version(self):
+        with contextlib.redirect_stdout(io.StringIO()) as out, self.assertRaises(
+            SystemExit
+        ) as raised:
+            cli.main(["--version"])
+        self.assertEqual(raised.exception.code, 0)
+        self.assertEqual(out.getvalue().strip(), f"ampere-hid {ampere_hid.__version__}")
+
+    def test_build_stamps_the_version(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = pathlib.Path(tmp) / "ampere-hid"
+            target.write_bytes(archive.build_bytes("9.9"))
+            target.chmod(0o755)
+            result = subprocess.run(
+                [sys.executable, str(target), "--version"],
+                capture_output=True, text=True, check=True,
+            )
+        self.assertEqual(result.stdout.strip(), "ampere-hid 9.9")
 
     def test_cli_without_command_prints_help(self):
         with contextlib.redirect_stdout(io.StringIO()) as out:

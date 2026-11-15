@@ -38,10 +38,11 @@ jobs:
 
       - name: Build the companion service
         run: |
+          version="${GITHUB_REF_NAME#v}"
           cd daemon
-          python3 -m ampere_hid build ../ampere-hid
+          python3 -m ampere_hid build --version "$version" ../ampere-hid
           cd ..
-          ./ampere-hid --help
+          test "$(./ampere-hid --version)" = "ampere-hid ${version}"
 
       - name: Extract notes from the changelog
         run: |

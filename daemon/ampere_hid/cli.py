@@ -6,8 +6,8 @@ import json
 import os
 import sys
 
+from . import __version__, tools
 from . import install as installer
-from . import tools
 from .archive import build_bytes
 from .hidraw import log
 from .sweep import query_all
@@ -63,7 +63,7 @@ def cmd_uninstall(args):
 
 def cmd_build(args):
     with open(args.output, "wb") as f:
-        f.write(build_bytes())
+        f.write(build_bytes(args.version))
     os.chmod(args.output, 0o755)
     return 0
 
@@ -72,6 +72,9 @@ def build_parser():
     parser = argparse.ArgumentParser(
         prog="ampere-hid",
         description="Battery level of wireless mice that UPower does not report.",
+    )
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {__version__}"
     )
     sub = parser.add_subparsers(dest="command", metavar="command")
 
@@ -95,6 +98,10 @@ def build_parser():
     p.add_argument("--udev", action="store_true", help="also remove the udev rule (root)")
     p = add("build", cmd_build, "write the single-file program (for packaging)")
     p.add_argument("output")
+    p.add_argument(
+        "--version", dest="version", metavar="VERSION",
+        help="stamp this version into the program (the release does this)",
+    )
     return parser
 
 

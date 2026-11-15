@@ -2,6 +2,7 @@
 """Build and locate the single-file ``ampere-hid`` program (a zipapp)."""
 
 import io
+import re
 import shutil
 import tempfile
 import zipapp
@@ -27,7 +28,19 @@ def running_archive():
     return None
 
 
-def build_bytes():
+def stamp_version(source, version):
+    """Write ``version`` into the package copy that goes into the archive."""
+    init = Path(source) / "ampere_hid" / "__init__.py"
+    text, count = re.subn(
+        r'^__version__ = .*$', f'__version__ = "{version}"', init.read_text(encoding="utf-8"),
+        count=1, flags=re.MULTILINE,
+    )
+    if count != 1:
+        raise ValueError(f"no __version__ line in {init}")
+    init.write_text(text, encoding="utf-8")
+
+
+def build_bytes(version=None):
     """Pack the ``ampere_hid`` package into a zipapp and return its bytes."""
     package = Path(__file__).resolve().parent
     with tempfile.TemporaryDirectory() as tmp:
@@ -37,6 +50,8 @@ def build_bytes():
             source / package.name,
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
         )
+        if version:
+            stamp_version(source, version)
         (source / "__main__.py").write_text(ENTRY_POINT, encoding="utf-8")
         target = io.BytesIO()
         zipapp.create_archive(

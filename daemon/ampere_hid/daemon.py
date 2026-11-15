@@ -33,7 +33,7 @@ try:
 except (ImportError, ValueError):
     GLibUnix = None
 
-from . import grace  # noqa: E402
+from . import __version__, grace  # noqa: E402
 from .hidraw import can_access, log, wait_for_activity  # noqa: E402
 from .names import BUS_NAME, IFACE, OBJECT_PATH  # noqa: E402
 from .sweep import read_devices  # noqa: E402
@@ -207,6 +207,7 @@ def add_unix_signal(signum, handler):
 
 def run():
     """Own the bus name and serve until asked to quit or idle."""
+    log(f"{__version__} starting")
     loop = GLib.MainLoop()
     daemon = Daemon(loop)
     Gio.bus_own_name(
