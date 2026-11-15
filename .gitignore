@@ -16,3 +16,4 @@ schemas/gschemas.compiled
 
 # Node modules (ESLint in CI)
 node_modules/
+/ampere-hid.sha256

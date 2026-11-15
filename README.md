@@ -53,6 +53,9 @@ chmod +x ampere-hid
 ./ampere-hid install --udev
 ```
 
+To check the download first, fetch `ampere-hid.sha256` from the same release
+and run `sha256sum -c ampere-hid.sha256` next to the file.
+
 This is a one-time command for you to run. The extension never downloads or
 executes anything itself; it only talks to the service over D-Bus.
 
