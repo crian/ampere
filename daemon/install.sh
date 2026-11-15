@@ -45,6 +45,15 @@ EOF
     exit 1
 fi
 
+# Offer the udev rule when it is missing, but only if we can ask (a terminal).
+if [ "$with_udev" -eq 0 ] && [ ! -f "$rules" ] && [ -t 0 ]; then
+    printf 'Install the udev rule now (needs sudo)? [y/N] '
+    read -r answer || answer=
+    case "$answer" in
+        y|Y|yes|YES) with_udev=1 ;;
+    esac
+fi
+
 install -d "$libdir" "$unitdir" "$dbusdir"
 
 # Replace the package, so dropped drivers or stale caches do not linger.

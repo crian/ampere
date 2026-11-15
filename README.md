@@ -61,7 +61,8 @@ Maya X, an MCHOSE A7 V2 Pro or an ATK A9. Everything else works without it.
    ./daemon/install.sh
    ```
 
-   Add `--udev` to install the rule in the same step (it calls `sudo`).
+   The script offers to install the udev rule as well; `--udev` answers that
+   question up front. Either way it needs `sudo`.
 
 3. Turn on "Vendor HID battery" in the extension preferences.
 
