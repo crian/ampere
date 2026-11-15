@@ -13,7 +13,9 @@ import {
     HID_BATTERY_BUS_NAME,
     HID_BATTERY_IFACE,
     HID_BATTERY_OBJECT_PATH,
+    daemonTooOld,
     readHidBattery,
+    readHidVersion,
 } from './hidbattery.js';
 
 const toHex = rgba =>
@@ -83,8 +85,9 @@ export default class AmperePrefs extends ExtensionPreferences {
         settings.bind('vendor-hid-enabled', vendorRow, 'active', Gio.SettingsBindFlags.DEFAULT);
         vendor.add(vendorRow);
 
-        // Shown only while the service is missing. The command is copied to the
-        // clipboard here, never executed from the extension.
+        // Shown while the service is missing or older than the extension. The
+        // command is copied to the clipboard here, never executed from the
+        // extension.
         // Three short lines read better than one long, wrapped line; the copy
         // button still copies a command that runs as it is.
         const installCommand = [
@@ -112,8 +115,19 @@ export default class AmperePrefs extends ExtensionPreferences {
         });
         warning.add_suffix(copyButton);
         vendor.add(warning);
-        const serviceWarning = ok => {
-            warning.visible = !ok;
+        // version: undefined when it was not asked, null when the service has
+        // no Version property yet.
+        const serviceWarning = (ok, version) => {
+            const outdated = ok && daemonTooOld(version);
+            if (!outdated) {
+                warning.title = _('Companion service not running');
+            } else if (version) {
+                warning.title = _('Companion service %s is outdated')
+                    .replace('%s', version);
+            } else {
+                warning.title = _('Companion service is outdated');
+            }
+            warning.visible = !ok || outdated;
         };
         page.add(vendor);
 
@@ -199,7 +213,15 @@ export default class AmperePrefs extends ExtensionPreferences {
             if (settings.get_boolean('vendor-hid-enabled')) {
                 try {
                     const result = await readHidBattery(null);
-                    serviceWarning(result.ok);
+                    let version;
+                    if (result.ok) {
+                        try {
+                            version = await readHidVersion(null);
+                        } catch (e) {
+                            console.error(`[ampere] cannot read the service version: ${e}`);
+                        }
+                    }
+                    serviceWarning(result.ok, version);
                     for (const item of result.items)
                         devices.set(item.key, item.name);
                 } catch (e) {

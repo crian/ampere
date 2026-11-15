@@ -80,6 +80,7 @@ Bus name:  org.gnome.shell.extensions.ampere.HidBattery
 Object:    /org/gnome/shell/extensions/ampere/HidBattery
 Interface: org.gnome.shell.extensions.ampere.HidBattery
 Method:    GetDevices() -> s   JSON {"devices": [...]}
+Property:  Version -> s        the service's own version
 Signal:    Changed()
 ```
 

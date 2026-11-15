@@ -60,7 +60,9 @@ truncated download; it does not prove that the release itself is genuine.
 This is a one-time command for you to run. The extension never downloads or
 executes anything itself; it only talks to the service over D-Bus.
 
-Then turn on "Vendor HID battery" in the extension preferences.
+Then turn on "Vendor HID battery" in the extension preferences. The preferences
+also tell you when the service is older than the extension expects; run the
+same commands again to update it.
 
 `install` copies the program to `~/.local/bin/ampere-hid` and writes a systemd
 user unit and a D-Bus activation file. The unit is not enabled at login;

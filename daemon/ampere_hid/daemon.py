@@ -79,10 +79,10 @@ INTROSPECTION_XML = """
       <arg type="s" direction="out" name="devices"/>
     </method>
     <signal name="Changed"/>
+    <property name="Version" type="s" access="read"/>
   </interface>
 </node>
 """
-
 
 class Daemon:
     """Serves cached readings over D-Bus. The sweep runs in a thread.
@@ -249,7 +249,11 @@ class Daemon:
     def on_bus_acquired(self, connection, name):
         node = Gio.DBusNodeInfo.new_for_xml(INTROSPECTION_XML)
         connection.register_object(
-            OBJECT_PATH, node.interfaces[0], self.on_method_call, None, None
+            OBJECT_PATH,
+            node.interfaces[0],
+            self.on_method_call,
+            self.on_get_property,
+            None,
         )
         self._connection = connection
         # Answer immediately from the (empty) cache; the first sweep follows.
@@ -257,6 +261,12 @@ class Daemon:
         self._watch_uevents()
         self.request_poll()
         self._schedule()
+
+    def on_get_property(self, connection, sender, path, iface, name):
+        """The extension compares this with the version it needs."""
+        if name == "Version":
+            return GLib.Variant("s", __version__)
+        return None
 
     def on_name_lost(self, connection, name):
         log(f"could not own bus name {name}")

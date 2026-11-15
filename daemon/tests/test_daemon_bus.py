@@ -18,6 +18,7 @@ import unittest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
+import ampere_hid  # noqa: E402
 from ampere_hid import archive, install  # noqa: E402
 from ampere_hid.names import BUS_NAME, IFACE, OBJECT_PATH  # noqa: E402
 
@@ -25,6 +26,7 @@ DAEMON_DIR = pathlib.Path(__file__).resolve().parent.parent
 
 # Runs inside `dbus-run-session`: start the daemon, query it, stop it.
 CLIENT = r"""
+import json
 import subprocess
 import sys
 import time
@@ -37,6 +39,7 @@ from gi.repository import Gio, GLib
 name, path, iface, cwd, *command = sys.argv[1:]
 proc = subprocess.Popen(command, cwd=cwd)
 payload = None
+version = None
 try:
     conn = Gio.bus_get_sync(Gio.BusType.SESSION, None)
     deadline = time.time() + 20
@@ -51,6 +54,12 @@ try:
             payload = reply.unpack()[0]
         except GLib.Error:
             time.sleep(0.2)
+    if payload is not None:
+        version = conn.call_sync(
+            name, path, "org.freedesktop.DBus.Properties", "Get",
+            GLib.Variant("(ss)", [iface, "Version"]), GLib.VariantType("(v)"),
+            Gio.DBusCallFlags.NONE, 2000, None,
+        ).unpack()[0]
 finally:
     proc.terminate()
     try:
@@ -60,9 +69,11 @@ finally:
         code = "timeout"
 if payload is None:
     sys.exit("the daemon never answered GetDevices")
+if version is None:
+    sys.exit("the daemon never reported its version")
 if code != 0:
     sys.exit("daemon ended with %s after SIGTERM" % code)
-print(payload)
+print(json.dumps({"payload": payload, "version": version}))
 """
 
 
@@ -87,19 +98,22 @@ class DaemonOnSessionBusTests(unittest.TestCase):
                 env=env,
             )
         self.assertEqual(result.returncode, 0, result.stderr)
-        return json.loads(result.stdout.strip().splitlines()[-1])
+        answer = json.loads(result.stdout.strip().splitlines()[-1])
+        return json.loads(answer["payload"]), answer["version"]
 
     def test_package_answers_and_exits_cleanly(self):
-        payload = self.ask(sys.executable, "-m", "ampere_hid", "run")
+        payload, version = self.ask(sys.executable, "-m", "ampere_hid", "run")
         self.assertIsInstance(payload["devices"], list)
+        self.assertEqual(version, ampere_hid.__version__)
 
-    def test_built_program_answers_and_exits_cleanly(self):
+    def test_built_program_answers_and_reports_its_stamped_version(self):
         with tempfile.TemporaryDirectory() as tmp:
             program = pathlib.Path(tmp) / "ampere-hid"
-            program.write_bytes(archive.build_bytes())
+            program.write_bytes(archive.build_bytes("9.8.7"))
             program.chmod(0o755)
-            payload = self.ask(sys.executable, str(program), "run")
+            payload, version = self.ask(sys.executable, str(program), "run")
         self.assertIsInstance(payload["devices"], list)
+        self.assertEqual(version, "9.8.7")
 
 
 if __name__ == "__main__":

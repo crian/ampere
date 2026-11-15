@@ -11,6 +11,10 @@ export const HID_BATTERY_BUS_NAME = 'org.gnome.shell.extensions.ampere.HidBatter
 export const HID_BATTERY_OBJECT_PATH = '/org/gnome/shell/extensions/ampere/HidBattery';
 export const HID_BATTERY_IFACE = 'org.gnome.shell.extensions.ampere.HidBattery';
 
+// Oldest companion service this extension works with. Raise it when the
+// extension starts to rely on something that a newer service added.
+export const MIN_DAEMON_VERSION = '1.1.1';
+
 const STATE_BY_PROTOCOL = {
     0: STATE.DISCHARGING,
     1: STATE.CHARGING,
@@ -33,6 +37,10 @@ const isMissingService = e => e instanceof GLib.Error && (
     e.matches(Gio.DBusError, Gio.DBusError.SERVICE_UNKNOWN) ||
     e.matches(Gio.DBusError, Gio.DBusError.SPAWN_EXEC_FAILED) ||
     e.matches(Gio.DBusError, Gio.DBusError.SPAWN_FAILED));
+
+const isMissingProperty = e => e instanceof GLib.Error && (
+    e.matches(Gio.DBusError, Gio.DBusError.UNKNOWN_PROPERTY) ||
+    e.matches(Gio.DBusError, Gio.DBusError.INVALID_ARGS));
 
 const parse = json => {
     let data;
@@ -58,6 +66,51 @@ const getDevices = (cancellable, flags = Gio.DBusCallFlags.NONE) =>
         HID_BATTERY_BUS_NAME, HID_BATTERY_OBJECT_PATH, HID_BATTERY_IFACE,
         'GetDevices', null, new GLib.VariantType('(s)'), flags, 5000,
         cancellable);
+
+/**
+ * Version of the running companion service as a string, or null when it
+ * answers but has no Version property, which means it predates this check.
+ */
+export async function readHidVersion(cancellable) {
+    try {
+        const reply = await Gio.DBus.session.call(
+            HID_BATTERY_BUS_NAME, HID_BATTERY_OBJECT_PATH,
+            'org.freedesktop.DBus.Properties', 'Get',
+            new GLib.Variant('(ss)', [HID_BATTERY_IFACE, 'Version']),
+            new GLib.VariantType('(v)'), Gio.DBusCallFlags.NONE, 5000, cancellable);
+        const [version] = reply.recursiveUnpack();
+        return String(version);
+    } catch (e) {
+        if (isCancelled(e))
+            throw e;
+        if (isMissingProperty(e))
+            return null;
+        throw e;
+    }
+}
+
+/**
+ * True when the service is older than MIN_DAEMON_VERSION. null (no Version
+ * property) counts as older. A development build ('dev'), an unreadable version
+ * and undefined (not asked) never count, so nothing nags without a reason.
+ */
+export function daemonTooOld(version) {
+    if (version === null)
+        return true;
+    if (typeof version !== 'string' || version === 'dev')
+        return false;
+
+    const have = version.split('.').map(n => parseInt(n, 10));
+    if (have.some(Number.isNaN))
+        return false;
+    const want = MIN_DAEMON_VERSION.split('.').map(n => parseInt(n, 10));
+    for (let i = 0; i < want.length; i++) {
+        const part = have[i] ?? 0;
+        if (part !== want[i])
+            return part < want[i];
+    }
+    return false;
+}
 
 /** Async query for the shell. ok is false if the companion daemon is missing. */
 export async function readHidBattery(cancellable) {
