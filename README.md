@@ -100,7 +100,7 @@ session startup instead.
 | Other Lamzu receivers (`3554`, `37b0`) | Aurora and Compx, whichever answers | not tested |
 | ATK A9 Max Ultra 2.0 (`373b:11fe`) | Compx 17-byte report | yes |
 | Other ATK/VXE/VGN and Compx rebrands (`373b`, `260d`, `33e4`) | Compx | not tested |
-| MCHOSE A7 V2 Pro (`3837:100a`) | MCHOSE feature query | yes |
+| MCHOSE A7 V2 Pro (`3837:100a`, on the cable `3837:4018`) | MCHOSE feature query | yes |
 | Other MCHOSE receivers (`3837`, `5253`) | MCHOSE feature query | not tested |
 
 Only the rows marked "yes" were checked on real hardware. If your model is
@@ -113,6 +113,10 @@ to be added (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 ```sh
 ampere-hid diagnose
 ```
+
+If the mouse is connected by cable and receiver at the same time, it appears
+twice: the two connections report different serial numbers, so they are two
+devices as far as the service can tell.
 
 It shows every hidraw device, its driver and the raw answer. It only sends
 battery queries and changes no settings. A sleeping mouse answers nothing; move
