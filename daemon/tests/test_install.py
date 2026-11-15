@@ -3,6 +3,7 @@
 
 import contextlib
 import io
+import os
 import pathlib
 import re
 import subprocess
@@ -204,6 +205,81 @@ class ProgramTests(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()) as out:
             self.assertEqual(cli.main(["rules"]), 0)
         self.assertEqual(out.getvalue(), udev.render_rules())
+
+
+class InstallFromProgramTests(unittest.TestCase):
+    """The user path: run the built file and let it install itself."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = pathlib.Path(self._tmp.name)
+        self.home = self.root / "home"
+        self.bin = self.root / "bin"
+        self.home.mkdir()
+        self.bin.mkdir()
+
+        self.log = self.root / "systemctl.log"
+        fake = self.bin / "systemctl"
+        fake.write_text(
+            '#!/bin/sh\necho "$@" >> "' + str(self.log) + '"\nexit 0\n',
+            encoding="utf-8",
+        )
+        fake.chmod(0o755)
+
+        self.program = self.root / "ampere-hid"
+        self.program.write_bytes(archive.build_bytes())
+        self.program.chmod(0o755)
+
+    def run_program(self, *args):
+        env = {
+            "HOME": str(self.home),
+            "PATH": f"{self.bin}:{os.environ.get('PATH', '/usr/bin:/bin')}",
+        }
+        return subprocess.run(
+            [sys.executable, str(self.program), *args],
+            env=env, capture_output=True, text=True,
+        )
+
+    def installed_paths(self):
+        home = self.home
+        return (
+            home / ".local" / "bin" / "ampere-hid",
+            home / ".config" / "systemd" / "user" / "ampere-hid.service",
+            home / ".local" / "share" / "dbus-1" / "services" / f"{BUS_NAME}.service",
+        )
+
+    def test_the_built_file_installs_itself(self):
+        result = self.run_program("install", "--no-udev")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+        program, unit, dbus_service = self.installed_paths()
+        self.assertTrue(program.is_file())
+        self.assertEqual(program.read_bytes(), self.program.read_bytes())
+        self.assertIn(" run", unit.read_text(encoding="utf-8"))
+        self.assertIn(f"Name={BUS_NAME}", dbus_service.read_text(encoding="utf-8"))
+
+        # The fake systemctl was called, and the first install restarts.
+        logged = self.log.read_text(encoding="utf-8")
+        self.assertIn("--user restart ampere-hid.service", logged)
+
+    def test_running_install_twice_only_starts(self):
+        self.run_program("install", "--no-udev")
+        self.log.write_text("", encoding="utf-8")
+
+        result = self.run_program("install", "--no-udev")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        logged = self.log.read_text(encoding="utf-8")
+        self.assertIn("--user start ampere-hid.service", logged)
+        self.assertNotIn("--user restart ampere-hid.service", logged)
+
+    def test_uninstall_removes_the_installed_files(self):
+        self.run_program("install", "--no-udev")
+        result = self.run_program("uninstall")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+        for path in self.installed_paths():
+            self.assertFalse(path.exists(), path)
 
 
 if __name__ == "__main__":
