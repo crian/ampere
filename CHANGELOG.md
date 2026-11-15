@@ -3,6 +3,28 @@
 The version numbers on the left are git tags. EGO assigns its own counter to
 extension uploads; entries that went to EGO note it, so both can be matched up.
 
+## v1.2 – EGO version 3 (2026-11-15)
+
+- A mouse that is switched off disappears from the panel after the grace
+  period. Lamzu receivers say so explicitly; the other dongles simply stop
+  answering. Before, the receiver kept repeating its last value.
+- The service polls on a fixed 30 s cadence. Waiting for a sleeping mouse no
+  longer stretches the interval, and the readings of the devices that did
+  answer are shown before the wait.
+- Plugging a device in ends that wait at once. Silent receivers are probed more
+  cheaply (Compx and Lamzu), and a mouse that wakes up is found again on the
+  next sweep.
+- `ampere-hid status` shows version, service state, udev rule and devices on one
+  screen.
+- The service reports its version over D-Bus. The preferences point at the
+  install command when it is older than the extension expects.
+- The access warning now tells a missing or outdated udev rule apart from a
+  product ID that is not in the table; `diagnose` reports the same reason.
+
+The companion service changed too: reinstall it from this release
+(`ampere-hid install`) to get the fixes above. As before, the extension package
+contains no daemon code.
+
 ## v1.1 – EGO version 2 (2026-11-15)
 
 - The companion service listens to hidraw uevents, so a device appears within a
