@@ -13,7 +13,7 @@ from unittest import mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from ampere_hid import grace, uevent  # noqa: E402
+from ampere_hid import grace, sweep, uevent  # noqa: E402
 from ampere_hid.drivers import compx, find_driver, lamzu, matching_drivers  # noqa: E402
 from ampere_hid.hidraw import HidDevice, HidNode  # noqa: E402
 
@@ -183,6 +183,29 @@ class LamzuOfflineTests(unittest.TestCase):
             self.assertEqual(driver.read(device), (80, 0))
             self.assertIsNone(driver.read(device))
         aurora.assert_called_with(device.nodes[0], True)
+
+
+class SilentPathsTests(unittest.TestCase):
+    def test_only_devices_without_a_reading_are_watched(self):
+        awake = HidDevice("awake", "awake")
+        awake.add_node(HidNode("/dev/hidraw-awake", 0x373E, 0x001E, "a", "", 0))
+        asleep = HidDevice("asleep", "asleep")
+        asleep.add_node(HidNode("/dev/hidraw-asleep", 0x373B, 0x11FE, "b", "", 0))
+        with mock.patch.object(sweep, "can_access", return_value=True):
+            paths = sweep.silent_paths([awake, asleep], {"awake": {}})
+        self.assertEqual(paths, ["/dev/hidraw-asleep"])
+
+    def test_nothing_to_watch_when_every_device_answers(self):
+        device = HidDevice("awake", "awake")
+        device.add_node(HidNode("/dev/hidraw-awake", 0x373E, 0x001E, "a", "", 0))
+        with mock.patch.object(sweep, "can_access", return_value=True):
+            self.assertEqual(sweep.silent_paths([device], {"awake": {}}), [])
+
+    def test_nodes_without_access_are_skipped(self):
+        device = HidDevice("asleep", "asleep")
+        device.add_node(HidNode("/dev/hidraw-asleep", 0x373B, 0x11FE, "b", "", 0))
+        with mock.patch.object(sweep, "can_access", return_value=False):
+            self.assertEqual(sweep.silent_paths([device], {}), [])
 
 
 class DeviceKeyTests(unittest.TestCase):

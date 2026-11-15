@@ -2,7 +2,7 @@
 """Collect the battery readings of all devices that have a driver."""
 
 from .drivers import find_driver
-from .hidraw import enumerate_nodes, group_nodes, log
+from .hidraw import can_access, enumerate_nodes, group_nodes, log
 
 
 def read_devices():
@@ -38,3 +38,14 @@ def read_devices():
 def query_all():
     matched, fresh = read_devices()
     return list(fresh.values()), len(matched)
+
+
+def silent_paths(matched, fresh):
+    """Nodes of matching devices that gave no reading in this sweep."""
+    return [
+        node.path
+        for device in matched
+        if device.key not in fresh
+        for node in device.nodes
+        if can_access(node)
+    ]

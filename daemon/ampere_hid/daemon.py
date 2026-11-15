@@ -35,9 +35,9 @@ except (ImportError, ValueError):
     GLibUnix = None
 
 from . import __version__, grace  # noqa: E402
-from .hidraw import can_access, log, wait_for_activity  # noqa: E402
+from .hidraw import log, wait_for_activity  # noqa: E402
 from .names import BUS_NAME, IFACE, OBJECT_PATH  # noqa: E402
-from .sweep import read_devices  # noqa: E402
+from .sweep import read_devices, silent_paths  # noqa: E402
 from .uevent import open_monitor, read_events  # noqa: E402
 
 POLL_SECONDS = 30
@@ -117,18 +117,18 @@ class Daemon:
             self._connection.emit_signal(None, OBJECT_PATH, IFACE, "Changed", None)
 
     def _schedule(self):
+        """Start the poll timer; it repeats on its own every POLL_SECONDS."""
         if self._timer:
             GLib.source_remove(self._timer)
         self._timer = GLib.timeout_add_seconds(POLL_SECONDS, self._on_timeout)
 
     def _on_timeout(self):
-        self._timer = 0
         if IDLE_EXIT_SECONDS and time.monotonic() - self._last_call > IDLE_EXIT_SECONDS:
             log(f"no request for {IDLE_EXIT_SECONDS}s, exiting")
             self._loop.quit()
             return GLib.SOURCE_REMOVE
         self.request_poll()
-        return GLib.SOURCE_REMOVE
+        return GLib.SOURCE_CONTINUE
 
     def request_poll(self):
         """Start a sweep in the background, unless one is already running."""
@@ -152,17 +152,14 @@ class Daemon:
         self._drain_wake()
         try:
             matched, fresh = read_devices()
-            if matched and not fresh:
-                # The receiver answered nothing: the mouse is asleep. Wait for
-                # input instead of polling, then read again right away.
-                paths = [
-                    node.path
-                    for device in matched
-                    for node in device.nodes
-                    if can_access(node)
-                ]
-                if wait_for_activity(paths, ACTIVITY_WAIT_SECONDS, self._wake_r):
-                    matched, fresh = read_devices()
+            # A receiver that answered nothing: its mouse is asleep or switched
+            # off. Wait for its input instead of polling; the first report after
+            # waking ends the wait.
+            paths = silent_paths(matched, fresh)
+            if paths and wait_for_activity(
+                paths, ACTIVITY_WAIT_SECONDS, self._wake_r
+            ):
+                matched, fresh = read_devices()
         except Exception as e:  # a broken driver must not kill the daemon
             log(f"poll failed: {e}")
             GLib.idle_add(self._apply_failed)
@@ -171,7 +168,6 @@ class Daemon:
 
     def _apply_failed(self):
         self._polling = False
-        self._schedule()
         if self._poll_again:
             self._poll_again = False
             self.request_poll()
@@ -187,7 +183,6 @@ class Daemon:
         )
 
         self._set_payload(items)
-        self._schedule()
         if self._poll_again:
             self._poll_again = False
             self.request_poll()
@@ -254,6 +249,7 @@ class Daemon:
         self._last_call = time.monotonic()
         self._watch_uevents()
         self.request_poll()
+        self._schedule()
 
     def on_name_lost(self, connection, name):
         log(f"could not own bus name {name}")
