@@ -39,9 +39,11 @@ CMD_STATUS = 0x06
 CHANNELS = ((SHORT_REPORT, SHORT_LEN), (LONG_REPORT, LONG_LEN))
 
 # Re-ask before each read; the real answer normally arrives on a later exchange.
-ATTEMPTS = 4
+ATTEMPTS = 3
 ATTEMPT_GAP = 0.12
-PUSH_TIMEOUT = 1.5
+# The push arrives about every two seconds, but waiting that long per node made
+# a sweep slow while the mouse was asleep.
+PUSH_TIMEOUT = 0.6
 
 PUSH_REPORT = 0x13
 PUSH_SUBTYPE = 0x1D
@@ -100,28 +102,28 @@ def parse_push_report(data):
     return level, 0
 
 
-def read_node(node):
-    """Query the battery over the MCHOSE transport, or return ``None``."""
-    with HidHandle(node.path) as hid:
-        hid.flush()
-
-        for report, length in CHANNELS:
-            request = build_request(CMD_STATUS, report, length)
-            for _ in range(ATTEMPTS):
-                if not hid.send_feature(request):
-                    break  # this collection does not take the report
-                time.sleep(ATTEMPT_GAP)
-                parsed = parse_status_response(hid.read_feature(length + 1, report))
-                if parsed:
-                    return parsed
-
-        # Fallback: the receiver's periodic device-info push.
-        deadline = time.time() + PUSH_TIMEOUT
-        while time.time() < deadline:
-            parsed = parse_push_report(hid.read_input(timeout=0.2))
+def query_feature(hid, channels):
+    """Ask over the given report channels; return ``(reading, channel)``."""
+    for report, length in channels:
+        request = build_request(CMD_STATUS, report, length)
+        for _ in range(ATTEMPTS):
+            if not hid.send_feature(request):
+                break  # this collection does not take the report
+            time.sleep(ATTEMPT_GAP)
+            parsed = parse_status_response(hid.read_feature(length + 1, report))
             if parsed:
-                return parsed
-        return None
+                return parsed, (report, length)
+    return None, None
+
+
+def read_push(hid):
+    """Fallback: the receiver's periodic device-info push."""
+    deadline = time.time() + PUSH_TIMEOUT
+    while time.time() < deadline:
+        parsed = parse_push_report(hid.read_input(timeout=0.2))
+        if parsed:
+            return parsed
+    return None
 
 
 class MchoseDriver(Driver):
@@ -130,15 +132,47 @@ class MchoseDriver(Driver):
     vids = frozenset(VENDOR_IDS)
     preferred_interfaces = (2, 1, 0)
 
+    def __init__(self):
+        # Remember what answered, so a polling run asks the right node and
+        # report first instead of searching again every time.
+        self._node = {}
+        self._channel = {}
+
+    def _channels(self, key):
+        known = self._channel.get(key)
+        if known is None:
+            return CHANNELS
+        return (known,) + tuple(c for c in CHANNELS if c != known)
+
     def read(self, device):
-        for node in device.sorted_nodes(self.preferred_interfaces):
+        key = device.key
+        nodes = device.sorted_nodes(self.preferred_interfaces)
+        known = self._node.get(key)
+        if known:
+            nodes.sort(key=lambda node: node.path != known)
+
+        first = None
+        for node in nodes:
             if not can_access(node):
                 warn_permission(
                     node.path,
                     "run `ampere-hid install --udev`",
                 )
                 continue
-            battery = read_node(node)
+            if first is None:
+                first = node
+
+            with HidHandle(node.path) as hid:
+                hid.flush()
+                battery, channel = query_feature(hid, self._channels(key))
             if battery:
+                self._node[key] = node.path
+                self._channel[key] = channel
                 return battery
+
+        # Nothing answered a query: listen once on the first node we can open.
+        if first is not None:
+            with HidHandle(first.path) as hid:
+                hid.flush()
+                return read_push(hid)
         return None
