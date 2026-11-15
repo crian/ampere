@@ -85,10 +85,13 @@ export default class AmperePrefs extends ExtensionPreferences {
 
         // Shown only while the service is missing. The command is copied to the
         // clipboard here, never executed from the extension.
-        const installCommand =
-            'cd "$(mktemp -d)" && curl -fsSLo ampere-hid ' +
-            'https://github.com/crian/ampere/releases/latest/download/ampere-hid ' +
-            '&& chmod +x ampere-hid && ./ampere-hid install --udev';
+        // Three short lines read better than one long, wrapped line; the copy
+        // button still copies a command that runs as it is.
+        const installCommand = [
+            'cd "$(mktemp -d)"',
+            'curl -fsSLo ampere-hid https://github.com/crian/ampere/releases/latest/download/ampere-hid',
+            'chmod +x ampere-hid && ./ampere-hid install --udev',
+        ].join('\n');
         const copyButton = new Gtk.Button({
             icon_name: 'edit-copy-symbolic',
             valign: Gtk.Align.CENTER,
@@ -103,9 +106,8 @@ export default class AmperePrefs extends ExtensionPreferences {
 
         const warning = new Adw.ActionRow({
             title: _('Companion service not running'),
-            subtitle: installCommand,
-            // The command contains "&&" and "$(", which are not valid Pango markup.
-            use_markup: false,
+            subtitle: `<tt>${GLib.markup_escape_text(installCommand, -1)}</tt>`,
+            use_markup: true,
             visible: false,
         });
         warning.add_suffix(copyButton);
