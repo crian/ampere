@@ -169,8 +169,8 @@ export default class AmperePrefs extends ExtensionPreferences {
         // --- Devices, filled asynchronously ---
         const group = new Adw.PreferencesGroup({
             title: _('Devices'),
-            description: _('Choose which devices are shown. A device reported twice ' +
-                '(cable and receiver) is merged automatically.'),
+            description: _('Choose which devices are shown. A device that UPower ' +
+                'reports twice (cable and receiver) is merged automatically.'),
         });
         const loading = new Adw.ActionRow({title: _('Loading devices…')});
         group.add(loading);
