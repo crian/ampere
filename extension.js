@@ -130,6 +130,8 @@ class AmpereIndicator extends PanelMenu.Button {
             if (this._quickSettingsBox()) {
                 this._placeRetries = 0;
                 this._place();
+            } else {
+                this._retryPlacement();
             }
             return GLib.SOURCE_REMOVE;
         });
