@@ -111,7 +111,7 @@ class CompxBackoffTests(unittest.TestCase):
         with self.patch(), mock.patch.object(compx, "read_node", answer_on_one):
             self.assertEqual(self.driver.read(self.device), (50, 0))
             self.assertEqual([call[0] for call in self.calls][:2],
-                             ["/dev/hidraw-test0", "/dev/hidraw-test1"])
+                             ["/dev/hidraw-test2", "/dev/hidraw-test1"])
             self.calls.clear()
             self.assertEqual(self.driver.read(self.device), (50, 0))
         self.assertEqual([call[0] for call in self.calls], ["/dev/hidraw-test1"])
@@ -332,6 +332,15 @@ class DeviceKeyTests(unittest.TestCase):
     def test_key_falls_back_to_the_path(self):
         node = HidNode("/dev/hidraw9", 0x1234, 0x5678, "x", "", -1, "")
         self.assertEqual(node.key, "1234:5678:/dev/hidraw9")
+
+    def test_sorted_nodes_respects_preferred_order(self):
+        device = HidDevice("k", "n")
+        for iface in (0, 1, 2, 3):
+            device.add_node(HidNode(f"/dev/hidraw{iface}", 1, 1, "n", "", iface))
+        self.assertEqual(
+            [n.interface for n in device.sorted_nodes((2, 1, 0))],
+            [2, 1, 0, 3],
+        )
 
 
 class GraceTests(unittest.TestCase):

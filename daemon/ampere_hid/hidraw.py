@@ -117,11 +117,11 @@ class HidDevice:
             self.name = node.name
 
     def sorted_nodes(self, preferred_interfaces=()):
-        preferred = tuple(preferred_interfaces)
+        order = {iface: idx for idx, iface in enumerate(preferred_interfaces)}
         return sorted(
             self.nodes,
             key=lambda n: (
-                0 if n.interface in preferred else 1,
+                order.get(n.interface, len(order)),
                 n.interface if n.interface >= 0 else 99,
                 n.path,
             ),
