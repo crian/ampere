@@ -68,7 +68,7 @@ jobs:
             $0 ~ "^## v" version "( |$)" { found = 1; next }
             found && /^## / { exit }
             found { print }
-          ' CHANGELOG.md > notes.md
+          ' CHANGELOG.md | sed '/./,$!d' > notes.md
           test -s notes.md
 
       - name: Create release
