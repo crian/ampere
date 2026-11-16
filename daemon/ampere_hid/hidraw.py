@@ -75,9 +75,10 @@ def access_help(node):
 
 
 def warn_permission(node):
-    if node.path in _warned:
+    key = (node.vendor, node.product)
+    if key in _warned:
         return
-    _warned.add(node.path)
+    _warned.add(key)
     reason, hint = access_help(node)
     log(f"no access to {node.path}; {reason}; {hint}")
 

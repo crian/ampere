@@ -15,7 +15,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from ampere_hid import grace, status, sweep, uevent  # noqa: E402
 from ampere_hid.drivers import compx, find_driver, lamzu, matching_drivers  # noqa: E402
-from ampere_hid.hidraw import HidDevice, HidNode, access_help  # noqa: E402
+from ampere_hid.hidraw import HidDevice, HidNode, access_help, warn_permission  # noqa: E402
 
 
 def make_device(vendor, product, uniq="", phys=""):
@@ -219,6 +219,17 @@ class AccessHelpTests(unittest.TestCase):
         reason, hint = access_help(node)
         self.assertIn("373b:1271 is not in the udev table", reason)
         self.assertIn("udev.py", hint)
+
+    def test_warns_once_per_model_across_nodes(self):
+        from ampere_hid import hidraw
+
+        first = HidNode("/dev/hidraw10", 0x373B, 0x9999, "x", "", 0)
+        second = HidNode("/dev/hidraw11", 0x373B, 0x9999, "x", "", 1)
+        with mock.patch.object(hidraw, "_warned", set()), \
+                mock.patch.object(hidraw, "log") as log_mock:
+            warn_permission(first)
+            warn_permission(second)
+        self.assertEqual(log_mock.call_count, 1)
 
 
 class LamzuBackoffTests(unittest.TestCase):
