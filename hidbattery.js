@@ -3,7 +3,7 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
-import {STATE, isCancelled} from './utils.js';
+import {STATE, dbusCall, isCancelled} from './utils.js';
 
 // Session-bus service of the optional companion daemon; the extension never
 // spawns it itself.
@@ -58,7 +58,7 @@ const parse = json => {
 };
 
 const getDevices = (cancellable, flags = Gio.DBusCallFlags.NONE) =>
-    Gio.DBus.session.call(
+    dbusCall(Gio.DBus.session,
         HID_BATTERY_BUS_NAME, HID_BATTERY_OBJECT_PATH, HID_BATTERY_IFACE,
         'GetDevices', null, new GLib.VariantType('(s)'), flags, 5000,
         cancellable);
@@ -66,7 +66,7 @@ const getDevices = (cancellable, flags = Gio.DBusCallFlags.NONE) =>
 /** Version of the running service; null when it predates the property. */
 export async function readHidVersion(cancellable) {
     try {
-        const reply = await Gio.DBus.session.call(
+        const reply = await dbusCall(Gio.DBus.session,
             HID_BATTERY_BUS_NAME, HID_BATTERY_OBJECT_PATH,
             'org.freedesktop.DBus.Properties', 'Get',
             new GLib.Variant('(ss)', [HID_BATTERY_IFACE, 'Version']),

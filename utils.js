@@ -31,7 +31,16 @@ const ROOT = '/org/freedesktop/UPower';
 const DEVICE_IFACE = 'org.freedesktop.UPower.Device';
 const TIMEOUT_MS = 5000;
 
-Gio._promisify(Gio.DBusConnection.prototype, 'call', 'call_finish');
+export const dbusCall = (conn, busName, objectPath, iface, method, params, replyType, flags, timeoutMs, cancellable) =>
+    new Promise((resolve, reject) => {
+        conn.call(busName, objectPath, iface, method, params, replyType, flags, timeoutMs, cancellable, (_conn, res) => {
+            try {
+                resolve(conn.call_finish(res));
+            } catch (e) {
+                reject(e);
+            }
+        });
+    });
 
 export const isCancelled = e =>
     e instanceof GLib.Error && e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED);
@@ -66,14 +75,14 @@ export function deviceName(p) {
 /** Async, never blocks the shell. Returns plain objects (D-Bus properties). */
 export async function fetchDevices(cancellable) {
     const conn = Gio.DBus.system;
-    const reply = await conn.call(BUS, ROOT, BUS, 'EnumerateDevices', null,
+    const reply = await dbusCall(conn, BUS, ROOT, BUS, 'EnumerateDevices', null,
         new GLib.VariantType('(ao)'), Gio.DBusCallFlags.NONE, TIMEOUT_MS, cancellable);
     const [paths] = reply.deepUnpack();
     // Promise.all keeps the order of `paths`, so the panel keeps it too.
     // Pushing as the answers arrive would reshuffle the entries each poll.
     const devices = await Promise.all(paths.map(async path => {
         try {
-            const r = await conn.call(BUS, path, 'org.freedesktop.DBus.Properties', 'GetAll',
+            const r = await dbusCall(conn, BUS, path, 'org.freedesktop.DBus.Properties', 'GetAll',
                 new GLib.Variant('(s)', [DEVICE_IFACE]), new GLib.VariantType('(a{sv})'),
                 Gio.DBusCallFlags.NONE, TIMEOUT_MS, cancellable);
             const [props] = r.recursiveUnpack();
