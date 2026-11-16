@@ -225,7 +225,6 @@ export default class AmperePrefs extends ExtensionPreferences {
                         } catch (e) {
                             if (isCancelled(e))
                                 return;
-                            console.error(`[ampere] cannot read the service version: ${e}`);
                         }
                     }
                     if (cancellable.is_cancelled())
@@ -301,14 +300,16 @@ export default class AmperePrefs extends ExtensionPreferences {
                     again = false;
                     await fillDevices();
                 } while (again && !cancellable.is_cancelled());
+            } catch (e) {
+                if (!isCancelled(e))
+                    console.error(`[ampere] cannot refresh the device list: ${e}`);
             } finally {
                 running = false;
             }
         };
 
         const vendorSettingsId = settings.connect('changed::vendor-hid-enabled', () => {
-            refreshDevices().catch(e =>
-                console.error(`[ampere] cannot refresh the device list: ${e}`));
+            refreshDevices();
         });
         window.connect('destroy', () => settings.disconnect(vendorSettingsId));
 
@@ -317,13 +318,11 @@ export default class AmperePrefs extends ExtensionPreferences {
         const changedId = Gio.DBus.session.signal_subscribe(
             HID_BATTERY_BUS_NAME, HID_BATTERY_IFACE, 'Changed', HID_BATTERY_OBJECT_PATH, null,
             Gio.DBusSignalFlags.NONE, () => {
-                if (settings.get_boolean('vendor-hid-enabled')) {
-                    refreshDevices().catch(e =>
-                        console.error(`[ampere] cannot refresh the device list: ${e}`));
-                }
+                if (settings.get_boolean('vendor-hid-enabled'))
+                    refreshDevices();
             });
         window.connect('destroy', () => Gio.DBus.session.signal_unsubscribe(changedId));
 
-        refreshDevices().catch(e => console.error(`[ampere] cannot fill the device list: ${e}`));
+        refreshDevices();
     }
 }
