@@ -3,6 +3,25 @@
 The version numbers on the left are git tags. EGO assigns its own counter to
 extension uploads; entries that went to EGO note it, so both can be matched up.
 
+## v1.3 – EGO version 4 (2026-11-16)
+
+Supersedes the pending v1.2 upload on EGO with review and lifecycle clean-ups:
+
+- Extension: use a local D-Bus call helper instead of mutating
+  `Gio.DBusConnection.prototype`, guard async callbacks after `disable()`, and
+  keep retrying Quick Settings placement if the panel is not ready yet
+- Preferences: cancel pending D-Bus calls and disconnect threshold handlers when
+  the window closes, and consolidate console error logging (fixes the Shexli
+  `EGO-A-004` warning)
+- Companion service: probe preferred HID interfaces in the declared order
+  (`2, 1, 0` instead of `0, 1, 2`), deduplicate permission warnings per USB
+  model instead of per `/dev/hidraw` node, and remove all GLib sources cleanly
+  on exit
+
+Reinstall the companion service (`ampere-hid install`) to get the daemon fixes
+and match the version expected by the preferences. As before, the extension
+package contains no daemon code.
+
 ## v1.2 – EGO version 3 (2026-11-15)
 
 - A mouse that is switched off disappears from the panel after the grace
