@@ -59,10 +59,9 @@ class AmpereIndicator extends PanelMenu.Button {
         // dontCreateMenu = true: no popup menu, no input grab, no hover loops.
         super._init(0.5, 'Ampere', true);
         this._settings = settings;
-        this._mode = null;
         this._hasItems = false;
-        this._placeRetries = 0;
-        this._placeRetryId = 0;
+        this._qsBox = null;
+        this._qsChildId = 0;
         this.add_style_class_name('ampere-button');
 
         this._box = new St.BoxLayout({
@@ -105,36 +104,48 @@ class AmpereIndicator extends PanelMenu.Button {
         const mode = this._settings.get_string('placement');
         const qsBox = this._quickSettingsBox();
         const wanted = mode === 'quick-settings' && qsBox ? 'quick-settings' : 'separate';
-        if (wanted !== this._mode) {
-            this._box.get_parent()?.remove_child(this._box);
-            if (wanted === 'quick-settings')
+
+        if (wanted === 'quick-settings') {
+            this._watchQuickSettings(qsBox);
+            if (this._box.get_parent() !== qsBox) {
+                this._box.get_parent()?.remove_child(this._box);
                 qsBox.insert_child_at_index(this._box, 0);
-            else
+            } else if (qsBox.get_first_child() !== this._box) {
+                qsBox.set_child_at_index(this._box, 0);
+            }
+        } else {
+            this._unwatchQuickSettings();
+            if (this._box.get_parent() !== this) {
+                this._box.get_parent()?.remove_child(this._box);
                 this.add_child(this._box);
-            this._mode = wanted;
+            }
         }
         this._box.visible = this._hasItems;
         this.visible = wanted === 'separate' && this._hasItems;
-
-        // Quick settings may not exist yet when the extension is enabled early.
-        if (mode === 'quick-settings' && !qsBox)
-            this._retryPlacement();
     }
 
-    _retryPlacement() {
-        if (this._placeRetryId || this._placeRetries >= 20)
+    // Quick settings adds its own indicators asynchronously; keep ours in front.
+    _watchQuickSettings(qsBox) {
+        if (this._qsBox === qsBox)
             return;
-        this._placeRetries++;
-        this._placeRetryId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
-            this._placeRetryId = 0;
-            if (this._quickSettingsBox()) {
-                this._placeRetries = 0;
-                this._place();
-            } else {
-                this._retryPlacement();
-            }
-            return GLib.SOURCE_REMOVE;
+        this._unwatchQuickSettings();
+        this._qsBox = qsBox;
+        this._qsChildId = qsBox.connect('child-added', (_box, child) => {
+            if (child !== this._box && this._box.get_parent() === qsBox)
+                qsBox.set_child_at_index(this._box, 0);
         });
+    }
+
+    _unwatchQuickSettings() {
+        if (this._qsChildId) {
+            try {
+                this._qsBox.disconnect(this._qsChildId);
+            } catch {
+                // The quick settings box is already gone at shutdown.
+            }
+        }
+        this._qsBox = null;
+        this._qsChildId = 0;
     }
 
     _showTooltip() {
@@ -254,10 +265,7 @@ class AmpereIndicator extends PanelMenu.Button {
     }
 
     destroy() {
-        if (this._placeRetryId) {
-            GLib.source_remove(this._placeRetryId);
-            this._placeRetryId = 0;
-        }
+        this._unwatchQuickSettings();
         this._tooltip?.destroy();
         this._tooltip = null;
         this._box?.destroy();
