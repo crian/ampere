@@ -8,7 +8,7 @@ import Gtk from 'gi://Gtk';
 
 import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
-import {fetchDevices, isPeripheral, deviceKey, deviceName} from './utils.js';
+import {fetchDevices, isCancelled, isPeripheral, deviceKey, deviceName} from './utils.js';
 import {
     HID_BATTERY_BUS_NAME,
     HID_BATTERY_IFACE,
@@ -32,10 +32,8 @@ export default class AmperePrefs extends ExtensionPreferences {
 
         // Everything below is built without waiting for D-Bus, so the window
         // opens immediately; the device list fills in when the answers arrive.
-        let alive = true;
-        window.connect('destroy', () => {
-            alive = false;
-        });
+        const cancellable = new Gio.Cancellable();
+        window.connect('destroy', () => cancellable.cancel());
 
         // --- Placement ---
         const placement = new Adw.PreferencesGroup({title: _('Placement')});
@@ -202,38 +200,49 @@ export default class AmperePrefs extends ExtensionPreferences {
         const fillDevices = async () => {
             const devices = new Map();
             try {
-                for (const device of await fetchDevices(null)) {
+                for (const device of await fetchDevices(cancellable)) {
                     if (isPeripheral(device))
                         devices.set(deviceKey(device), deviceName(device));
                 }
             } catch (e) {
+                if (isCancelled(e))
+                    return;
                 console.error(`[ampere] cannot read UPower devices: ${e}`);
             }
+
+            if (cancellable.is_cancelled())
+                return;
 
             // The vendor service is only asked when it is enabled, so opening
             // the window neither starts the daemon nor blocks on it.
             if (settings.get_boolean('vendor-hid-enabled')) {
                 try {
-                    const result = await readHidBattery(null);
+                    const result = await readHidBattery(cancellable);
                     let version;
                     if (result.ok) {
                         try {
-                            version = await readHidVersion(null);
+                            version = await readHidVersion(cancellable);
                         } catch (e) {
+                            if (isCancelled(e))
+                                return;
                             console.error(`[ampere] cannot read the service version: ${e}`);
                         }
                     }
+                    if (cancellable.is_cancelled())
+                        return;
                     serviceWarning(result.ok, version);
                     for (const item of result.items)
                         devices.set(item.key, item.name);
                 } catch (e) {
+                    if (isCancelled(e))
+                        return;
                     console.error(`[ampere] cannot read vendor HID devices: ${e}`);
                 }
             } else {
                 serviceWarning(true);
             }
 
-            if (!alive)
+            if (cancellable.is_cancelled())
                 return;
 
             const hidden = new Set(settings.get_strv('hidden-devices'));
@@ -291,7 +300,7 @@ export default class AmperePrefs extends ExtensionPreferences {
                 do {
                     again = false;
                     await fillDevices();
-                } while (again && alive);
+                } while (again && !cancellable.is_cancelled());
             } finally {
                 running = false;
             }
