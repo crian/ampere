@@ -95,6 +95,7 @@ class Daemon:
         self._poll_again = False
         self._timer = 0
         self._monitor = None
+        self._monitor_id = 0
         self._retry_id = 0
         self._wake_r, self._wake_w = os.pipe()
         os.set_blocking(self._wake_r, False)
@@ -194,7 +195,7 @@ class Daemon:
         except OSError as e:
             log(f"cannot watch udev events, polling only: {e}")
             return
-        GLib.io_add_watch(
+        self._monitor_id = GLib.io_add_watch(
             self._monitor.fileno(), GLib.PRIORITY_DEFAULT, GLib.IO_IN, self._on_uevent
         )
 
@@ -203,6 +204,7 @@ class Daemon:
             added, removed = read_events(self._monitor)
         except OSError as e:
             log(f"stopped watching udev events: {e}")
+            self._monitor_id = 0
             self._monitor.close()
             self._monitor = None
             return GLib.SOURCE_REMOVE
@@ -271,6 +273,9 @@ class Daemon:
         if self._retry_id:
             GLib.source_remove(self._retry_id)
             self._retry_id = 0
+        if self._monitor_id:
+            GLib.source_remove(self._monitor_id)
+            self._monitor_id = 0
         if self._monitor is not None:
             with contextlib.suppress(OSError):
                 self._monitor.close()
