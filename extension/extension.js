@@ -86,8 +86,9 @@ class AmpereIndicator extends PanelMenu.Button {
         });
 
         // Plain actor on the UI layer: shown on hover, hidden on leave.
+        // bms-popup-blur-target lets Blur my Shell (v78+) blur it when installed.
         this._tooltip = new St.BoxLayout({
-            style_class: 'ampere-tooltip',
+            style_class: 'ampere-tooltip bms-popup-blur-target',
             orientation: Clutter.Orientation.VERTICAL,
             reactive: false,
             visible: false,
@@ -217,6 +218,7 @@ class AmpereIndicator extends PanelMenu.Button {
 
     _makeRing(item) {
         const ring = new St.DrawingArea({width: 44, height: 44});
+        ring.connect('style-changed', () => ring.queue_repaint());
         ring.connect('repaint', area => {
             const cr = area.get_context();
             const [w, h] = area.get_surface_size();
