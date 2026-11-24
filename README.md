@@ -27,13 +27,11 @@ From source:
 ```sh
 git clone https://github.com/crian/ampere.git
 cd ampere
-glib-compile-schemas schemas/
-gnome-extensions pack --force \
-  --extra-source=utils.js \
-  --extra-source=hidbattery.js \
-  --extra-source=LICENSE
-gnome-extensions install --force ampere@crian.shell-extension.zip
+make install
 ```
+
+`make install` compiles the schema, packs the extension from `extension/` and
+installs it with `gnome-extensions`. `make help` lists the other targets.
 
 Log out and back in afterwards; Wayland cannot reload the shell in place.
 
@@ -85,8 +83,8 @@ To remove everything again:
 ampere-hid uninstall          # add --udev to remove the udev rule as well
 ```
 
-From a checkout, use `python3 -m ampere_hid install` from the `daemon/`
-directory instead; it builds the same single file.
+From a checkout, use `make daemon-install` (add `UDEV=1` for the udev rule)
+instead; it builds the same single file.
 
 On NixOS, take the output of `ampere-hid rules` into
 `services.udev.extraRules`; the service itself has to be packaged (for example

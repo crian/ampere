@@ -6,12 +6,18 @@ and run the code, how the companion service works, and how to add a mouse.
 ## Layout
 
 ```
-extension.js        panel indicator, polling and rendering
-prefs.js            preferences window
-hidbattery.js       D-Bus client for the companion service
-utils.js            UPower D-Bus access, shared enums and helpers
-stylesheet.css      panel and hover-card styling
-schemas/            GSettings schema (the compiled file is generated)
+Makefile            build, install and development targets (`make help`)
+eslint.config.mjs   lint rules for the extension JavaScript
+icon/, screenshots/ project assets, not part of the extension package
+
+extension/          everything that ships in the GNOME extension
+  extension.js      panel indicator, polling and rendering
+  prefs.js          preferences window
+  hidbattery.js     D-Bus client for the companion service
+  utils.js          UPower D-Bus access, shared enums and helpers
+  stylesheet.css    panel and hover-card styling
+  metadata.json     UUID, supported shell versions, version
+  schemas/          GSettings schema (the compiled file is generated)
 
 daemon/
   ampere_hid/       the package; released as the single file `ampere-hid`
@@ -37,38 +43,40 @@ daemon/
 ## Building and running
 
 ```sh
-glib-compile-schemas schemas/
-gnome-extensions pack --force \
-  --extra-source=utils.js \
-  --extra-source=hidbattery.js \
-  --extra-source=LICENSE
-gnome-extensions install --force ampere@crian.shell-extension.zip
+make install      # compile the schema, pack extension/, install the package
+make pack         # only build build/ampere@crian.shell-extension.zip
+make lint         # ESLint on extension/
+make test         # daemon tests
+make help         # everything else
 ```
 
 Log out and back in after changes (Wayland cannot reload the shell in place).
 
-`gnome-extensions pack` only includes the standard files; the `--extra-source`
-arguments add the runtime modules and the licence. The ZIP and
-`schemas/gschemas.compiled` are build artifacts and are not tracked.
+`make pack` runs `gnome-extensions pack` on `extension/`, which only includes
+the standard files; the runtime modules (`utils.js`, `hidbattery.js`) and
+`LICENSE` are added with `--extra-source`. The package therefore holds nothing
+from `daemon/` or the project root. `build/` and
+`extension/schemas/gschemas.compiled` are build artifacts and are not tracked.
 
-For development it is convenient to symlink the checkout into the extension
-directory instead of packing:
+For development it is convenient to link the directory into the extensions
+folder instead of packing:
 
 ```sh
-ln -s "$PWD" ~/.local/share/gnome-shell/extensions/ampere@crian
+make dev          # ln -s extension/ ~/.local/share/gnome-shell/extensions/ampere@crian
+make undev        # remove the link again
 ```
 
-In that case `schemas/gschemas.compiled` has to exist, because the shell loads
-the schema straight from that directory.
+The link needs `extension/schemas/gschemas.compiled`, because the shell loads
+the schema straight from that directory; `make dev` compiles it first.
 
 The companion service is built and installed from the checkout with:
 
 ```sh
-cd daemon
-python3 -m ampere_hid install      # builds the single file and installs it
+make daemon-install                # builds the single file and installs it
+# or, from daemon/: python3 -m ampere_hid install
 systemctl --user status ampere-hid
 journalctl --user -u ampere-hid -f
-python3 -m ampere_hid build ../ampere-hid   # only build, for a release
+make daemon                        # only build ./ampere-hid, for a release
 ```
 
 ## The companion service
@@ -181,7 +189,7 @@ The protocol parsers, the sweep and the installer are covered without
 hardware (the installer tests use a temporary home and a fake `systemctl`):
 
 ```sh
-cd daemon && python3 -m unittest discover -s tests -v
+make test
 ```
 
 `tests/test_daemon_bus.py` starts the real daemon on a private session bus

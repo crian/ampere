@@ -18,7 +18,7 @@ jobs:
           python3 -m pip install --user ruff
 
       - name: Compile settings schema
-        run: glib-compile-schemas --strict schemas/
+        run: make schemas
 
       - name: Lint Python
         run: |
@@ -28,16 +28,14 @@ jobs:
       # Includes the daemon smoke test on a private session bus
       # (daemon/tests/test_daemon_bus.py).
       - name: Python tests
-        run: python3 -m unittest discover -s daemon/tests -v
+        run: make test
 
       - name: Lint JavaScript
-        run: npx --yes eslint@10 extension.js prefs.js utils.js hidbattery.js
+        run: make lint
 
       - name: Build the single-file program
         run: |
-          cd daemon
-          python3 -m ampere_hid build ../ampere-hid
-          cd ..
+          make daemon
           ./ampere-hid --help
           test "$(./ampere-hid --version)" = "ampere-hid dev"
           # The built file must carry the full rule set and run on its own.
@@ -55,18 +53,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends gnome-shell
 
       - name: Build the package
-        run: |
-          glib-compile-schemas schemas/
-          gnome-extensions pack --force \
-            --extra-source=utils.js \
-            --extra-source=hidbattery.js \
-            --extra-source=LICENSE
+        run: make pack
 
       - name: Check the package contents
-        run: |
-          unzip -l ampere@crian.shell-extension.zip
-          if unzip -l ampere@crian.shell-extension.zip \
-              | grep -E 'daemon/|README|CONTRIBUTING|screenshots/|\.png'; then
-            echo "package contains files that do not belong there" >&2
-            exit 1
-          fi
+        run: make check-pack

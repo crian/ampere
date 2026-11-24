@@ -19,7 +19,7 @@ jobs:
         id: kind
         run: |
           version_name=$(python3 -c \
-            'import json; print(json.load(open("metadata.json"))["version-name"])')
+            'import json; print(json.load(open("extension/metadata.json"))["version-name"])')
           if [ "v$version_name" = "$GITHUB_REF_NAME" ]; then
             echo "extension=true" >> "$GITHUB_OUTPUT"
           else
@@ -35,22 +35,11 @@ jobs:
 
       - name: Build extension package
         if: steps.kind.outputs.extension == 'true'
-        run: |
-          glib-compile-schemas schemas/
-          gnome-extensions pack --force \
-            --extra-source=utils.js \
-            --extra-source=hidbattery.js \
-            --extra-source=LICENSE
+        run: make pack
 
       - name: Check package contents
         if: steps.kind.outputs.extension == 'true'
-        run: |
-          unzip -l ampere@crian.shell-extension.zip
-          if unzip -l ampere@crian.shell-extension.zip \
-              | grep -E 'daemon/|README|CONTRIBUTING|screenshots/|\.png'; then
-            echo "package contains files that do not belong there" >&2
-            exit 1
-          fi
+        run: make check-pack
 
       - name: Build the companion service
         run: |
@@ -77,7 +66,7 @@ jobs:
         run: |
           files=(./ampere-hid ./ampere-hid.sha256)
           if [ "${{ steps.kind.outputs.extension }}" = "true" ]; then
-            files+=(./ampere@crian.shell-extension.zip)
+            files+=(./build/ampere@crian.shell-extension.zip)
           fi
           gh release create "$GITHUB_REF_NAME" "${files[@]}" \
             --verify-tag \
