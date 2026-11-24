@@ -141,19 +141,46 @@ export default class AmperePrefs extends ExtensionPreferences {
         page.add(vendor);
 
         // --- Level colors ---
+        const colorKeys = [
+            'color-high',
+            'color-medium',
+            'color-low',
+            'color-charging',
+            'threshold-medium',
+            'threshold-low',
+        ];
+        const resetColors = new Gtk.Button({
+            child: new Adw.ButtonContent({
+                icon_name: 'edit-undo-symbolic',
+                label: _('Reset'),
+            }),
+            css_classes: ['flat'],
+            valign: Gtk.Align.CENTER,
+            tooltip_text: _('Reset colors and thresholds to defaults'),
+        });
         const colors = new Adw.PreferencesGroup({
             title: _('Level colors'),
             description: _('Used when "Colored bar" is on (bar and ring).'),
+            header_suffix: resetColors,
         });
+        const colorSyncers = [];
         const addColor = (key, title) => {
             const button = new Gtk.ColorDialogButton({
                 dialog: new Gtk.ColorDialog({with_alpha: false}),
                 valign: Gtk.Align.CENTER,
             });
-            const rgba = new Gdk.RGBA();
-            rgba.parse(settings.get_string(key));
-            button.rgba = rgba;
-            button.connect('notify::rgba', () => settings.set_string(key, toHex(button.rgba)));
+            const sync = () => {
+                const rgba = new Gdk.RGBA();
+                rgba.parse(settings.get_string(key));
+                button.rgba = rgba;
+            };
+            sync();
+            colorSyncers.push(sync);
+            button.connect('notify::rgba', () => {
+                const hex = toHex(button.rgba);
+                if (hex !== settings.get_string(key).toLowerCase())
+                    settings.set_string(key, hex);
+            });
             const row = new Adw.ActionRow({title, activatable_widget: button});
             row.add_suffix(button);
             colors.add(row);
@@ -177,6 +204,26 @@ export default class AmperePrefs extends ExtensionPreferences {
         addSpin('threshold-low', _('Low up to (%)'),
             _('At or below this value the low color is used'), 1, 98);
         page.add(colors);
+
+        const updateResetSensitive = () => {
+            resetColors.sensitive = colorKeys.some(key => settings.get_user_value(key) !== null);
+        };
+        updateResetSensitive();
+        resetColors.connect('clicked', () => {
+            // Reset threshold-medium before threshold-low so clampThresholds
+            // cannot clamp the default low value against a smaller medium one.
+            for (const key of colorKeys)
+                settings.reset(key);
+            for (const sync of colorSyncers)
+                sync();
+            updateResetSensitive();
+        });
+        const colorChangedIds = colorKeys.map(key =>
+            settings.connect(`changed::${key}`, updateResetSensitive));
+        window.connect('destroy', () => {
+            for (const id of colorChangedIds)
+                settings.disconnect(id);
+        });
 
         // The low threshold must stay below the medium one; keep it in range
         // when either value changes.
