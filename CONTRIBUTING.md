@@ -204,7 +204,7 @@ bogus percentage.
 
 CI compiles the schema, runs these tests, lints Python and JavaScript, builds
 the single-file `ampere-hid` and runs it, and builds the extension package to
-check that it contains only extension files.
+check that it contains only extension files and passes Shexli (EGO checks).
 
 ## Releasing
 
