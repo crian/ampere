@@ -69,10 +69,11 @@ const roundRect = (cr, x, y, w, h, r) => {
 
 const Indicator = GObject.registerClass(
 class AmpereIndicator extends PanelMenu.Button {
-    _init(settings) {
+    _init(settings, onActivate) {
         // dontCreateMenu = true: no popup menu, no input grab, no hover loops.
         super._init(0.5, 'Ampere', true);
         this._settings = settings;
+        this._onActivate = onActivate;
         this._hasItems = false;
         this._qsBox = null;
         this._qsChildId = 0;
@@ -102,7 +103,28 @@ class AmpereIndicator extends PanelMenu.Button {
                 this._tooltip.hide();
         });
 
+        // Clicking the own button (separate mode) opens the preferences.
+        if (Clutter.ClickGesture) {
+            const click = new Clutter.ClickGesture({
+                required_button: Clutter.BUTTON_PRIMARY,
+            });
+            click.connect('recognize', () => this._activate());
+            this.add_action(click);
+        } else {
+            this.connect('button-release-event', (_actor, event) => {
+                if (event.get_button() !== Clutter.BUTTON_PRIMARY)
+                    return Clutter.EVENT_PROPAGATE;
+                this._activate();
+                return Clutter.EVENT_STOP;
+            });
+        }
+
         this._place();
+    }
+
+    _activate() {
+        this._tooltip?.hide();
+        this._onActivate?.();
     }
 
     // The quick settings container is private API, so read it defensively.
@@ -282,6 +304,7 @@ class AmpereIndicator extends PanelMenu.Button {
 
     destroy() {
         this._unwatchQuickSettings();
+        this._onActivate = null;
         this._tooltip?.destroy();
         this._tooltip = null;
         this._box?.destroy();
@@ -302,7 +325,14 @@ export default class AmpereExtension extends Extension {
         this._polling = false;
         this._again = false;
 
-        this._indicator = new Indicator(this._settings);
+        this._indicator = new Indicator(this._settings, () => {
+            try {
+                this.openPreferences()?.catch(e =>
+                    console.error(`[ampere] failed to open preferences: ${e}`));
+            } catch (e) {
+                console.error(`[ampere] failed to open preferences: ${e}`);
+            }
+        });
         Main.panel.addToStatusArea(this.uuid, this._indicator, 0, 'right');
         this._settingsId = this._settings.connect('changed', (_settings, key) => {
             if (key === 'vendor-hid-enabled') {
