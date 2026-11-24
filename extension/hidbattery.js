@@ -38,7 +38,7 @@ const isMissingProperty = e => e instanceof GLib.Error && (
     e.matches(Gio.DBusError, Gio.DBusError.UNKNOWN_PROPERTY) ||
     e.matches(Gio.DBusError, Gio.DBusError.INVALID_ARGS));
 
-const parse = json => {
+export const parse = json => {
     let data;
     try {
         data = JSON.parse(json);

@@ -15,8 +15,8 @@ DEV_LINK := $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
 # Runtime modules that `gnome-extensions pack` does not pick up on its own.
 EXTRA_SOURCES := utils.js hidbattery.js
 
-.PHONY: help schemas pack check-pack install uninstall dev undev lint test \
-        daemon daemon-install daemon-uninstall clean
+.PHONY: help schemas pack check-pack install uninstall dev undev lint \
+        test test-py test-js daemon daemon-install daemon-uninstall clean
 
 help:
 	@echo "Extension:"
@@ -27,9 +27,11 @@ help:
 	@echo "  make uninstall        remove the installed extension"
 	@echo "  make dev              symlink $(EXT_DIR)/ into the extensions directory (for development)"
 	@echo "  make undev            remove that symlink"
-	@echo "  make lint             ESLint on the extension (needs npx)"
+	@echo "  make lint             ESLint on the extension and JS tests (needs npx)"
+	@echo "  make test-js          run the extension JS unit tests (needs gjs)"
 	@echo "Companion service:"
-	@echo "  make test             run the daemon tests"
+	@echo "  make test-py          run the daemon tests"
+	@echo "  make test             run both Python and JS tests"
 	@echo "  make daemon           build the single file ./ampere-hid"
 	@echo "  make daemon-install   build and install the service (add UDEV=1 for the udev rule)"
 	@echo "  make daemon-uninstall remove the service (add UDEV=1 to remove the udev rule)"
@@ -54,7 +56,7 @@ check-pack:
 	@test -f "$(PACKAGE)" || { echo "$(PACKAGE) not found; run 'make pack' first" >&2; exit 1; }
 	@unzip -l "$(PACKAGE)"
 	@if unzip -l "$(PACKAGE)" \
-		| grep -E 'daemon/|README|CONTRIBUTING|screenshots/|eslint|Makefile|\.png'; then \
+		| grep -E 'daemon/|tests/|README|CONTRIBUTING|screenshots/|eslint|Makefile|\.png'; then \
 		echo "package contains files that do not belong there" >&2; \
 		exit 1; \
 	fi
@@ -90,10 +92,15 @@ undev:
 	else echo "$(DEV_LINK) is not a symlink, left alone"; fi
 
 lint:
-	npx --yes eslint@10 "$(EXT_DIR)"
+	npx --yes eslint@10 "$(EXT_DIR)" tests
 
-test:
+test: test-py test-js
+
+test-py:
 	python3 -m unittest discover -s daemon/tests -v
+
+test-js:
+	gjs -m tests/test_extension.js
 
 daemon:
 	cd daemon && python3 -m ampere_hid build ../ampere-hid

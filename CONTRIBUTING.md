@@ -8,6 +8,7 @@ and run the code, how the companion service works, and how to add a mouse.
 ```
 Makefile            build, install and development targets (`make help`)
 eslint.config.mjs   lint rules for the extension JavaScript
+tests/              GJS unit tests for the extension helpers
 icon/, screenshots/ project assets, not part of the extension package
 
 extension/          everything that ships in the GNOME extension
@@ -45,8 +46,8 @@ daemon/
 ```sh
 make install      # compile the schema, pack extension/, install the package
 make pack         # only build build/ampere@crian.shell-extension.zip
-make lint         # ESLint on extension/
-make test         # daemon tests
+make lint         # ESLint on extension/ and tests/
+make test         # daemon and extension JS tests
 make help         # everything else
 ```
 
@@ -185,11 +186,12 @@ status instead of answering a query. None of these needs PyGObject.
 
 ## Tests
 
-The protocol parsers, the sweep and the installer are covered without
-hardware (the installer tests use a temporary home and a fake `systemctl`):
+The extension helpers (`utils.js`, `hidbattery.js`) and the companion service
+(protocol parsers, sweep and installer) are covered without hardware (the
+installer tests use a temporary home and a fake `systemctl`):
 
 ```sh
-make test
+make test          # runs both test-py and test-js
 ```
 
 `tests/test_daemon_bus.py` starts the real daemon on a private session bus

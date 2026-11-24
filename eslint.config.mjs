@@ -3,7 +3,7 @@
 
 export default [
     {
-        files: ['extension/**/*.js'],
+        files: ['extension/**/*.js', 'tests/**/*.js'],
         languageOptions: {
             ecmaVersion: 2023,
             sourceType: 'module',
