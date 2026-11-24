@@ -72,6 +72,19 @@ export function deviceName(p) {
     return model || vendor || 'Unknown device';
 }
 
+export function readDeviceNames(settings) {
+    return settings.get_value('device-names').deepUnpack();
+}
+
+export function writeDeviceNames(settings, names) {
+    settings.set_value('device-names', new GLib.Variant('a{ss}', names));
+}
+
+export function displayName(key, fallback, names) {
+    const custom = names?.[key]?.trim();
+    return custom || fallback;
+}
+
 /** Async, never blocks the shell. Returns plain objects (D-Bus properties). */
 export async function fetchDevices(cancellable) {
     const conn = Gio.DBus.system;

@@ -8,7 +8,15 @@ import Gtk from 'gi://Gtk';
 
 import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
-import {fetchDevices, isCancelled, isPeripheral, deviceKey, deviceName} from './utils.js';
+import {
+    deviceKey,
+    deviceName,
+    fetchDevices,
+    isCancelled,
+    isPeripheral,
+    readDeviceNames,
+    writeDeviceNames,
+} from './utils.js';
 import {
     HID_BATTERY_BUS_NAME,
     HID_BATTERY_IFACE,
@@ -187,8 +195,8 @@ export default class AmperePrefs extends ExtensionPreferences {
         // --- Devices, filled asynchronously ---
         const group = new Adw.PreferencesGroup({
             title: _('Devices'),
-            description: _('Choose which devices are shown. A device that UPower ' +
-                'reports twice (cable and receiver) is merged automatically.'),
+            description: _('Choose which devices are shown or give them custom names. ' +
+                'A device that UPower reports twice (cable and receiver) is merged automatically.'),
         });
         const loading = new Adw.ActionRow({title: _('Loading devices…')});
         group.add(loading);
@@ -249,9 +257,11 @@ export default class AmperePrefs extends ExtensionPreferences {
                 return;
 
             const hidden = new Set(settings.get_strv('hidden-devices'));
-            for (const key of hidden) {
+            const names = readDeviceNames(settings);
+            const disconnected = key => _('%s (not connected)').replace('%s', key);
+            for (const key of new Set([...hidden, ...Object.keys(names)])) {
                 if (!devices.has(key))
-                    devices.set(key, _('%s (not connected)').replace('%s', key));
+                    devices.set(key, disconnected(key));
             }
 
             // A Changed on every new percentage would otherwise rebuild the
@@ -278,16 +288,70 @@ export default class AmperePrefs extends ExtensionPreferences {
                 return;
             }
 
-            for (const [key, name] of devices) {
-                const row = new Adw.SwitchRow({title: name, subtitle: key, active: !hidden.has(key)});
-                row.connect('notify::active', () => {
+            for (const [key, detectedName] of devices) {
+                const custom = names[key]?.trim() ?? '';
+                const disconnectedLabel = disconnected(key);
+                const row = new Adw.ExpanderRow({use_markup: false});
+
+                const toggle = new Gtk.Switch({
+                    active: !hidden.has(key),
+                    valign: Gtk.Align.CENTER,
+                    tooltip_text: _('Show in panel'),
+                });
+                toggle.connect('notify::active', () => {
                     const list = new Set(settings.get_strv('hidden-devices'));
-                    if (row.active)
+                    if (toggle.active)
                         list.delete(key);
                     else
                         list.add(key);
                     settings.set_strv('hidden-devices', [...list]);
                 });
+                row.add_suffix(toggle);
+
+                const entry = new Adw.EntryRow({
+                    title: _('Custom name'),
+                    text: custom,
+                    show_apply_button: true,
+                });
+                const clearBtn = new Gtk.Button({
+                    icon_name: 'edit-clear-symbolic',
+                    valign: Gtk.Align.CENTER,
+                    tooltip_text: _('Reset name'),
+                    css_classes: ['flat'],
+                    visible: Boolean(custom),
+                });
+                entry.add_suffix(clearBtn);
+                row.add_row(entry);
+
+                const updateHeader = alias => {
+                    row.title = alias || detectedName;
+                    if (!alias)
+                        row.subtitle = key;
+                    else if (detectedName === disconnectedLabel)
+                        row.subtitle = detectedName;
+                    else
+                        row.subtitle = `${detectedName} · ${key}`;
+                    clearBtn.visible = Boolean(alias);
+                };
+                const saveName = raw => {
+                    const alias = raw.trim();
+                    const map = readDeviceNames(settings);
+                    if (alias)
+                        map[key] = alias;
+                    else
+                        delete map[key];
+                    writeDeviceNames(settings, map);
+                    if (entry.text !== alias) {
+                        entry.show_apply_button = false;
+                        entry.text = alias;
+                        entry.show_apply_button = true;
+                    }
+                    updateHeader(alias);
+                };
+                entry.connect('apply', () => saveName(entry.text));
+                clearBtn.connect('clicked', () => saveName(''));
+
+                updateHeader(custom);
                 group.add(row);
                 rows.push(row);
             }

@@ -11,7 +11,18 @@ import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import {Extension, gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
-import {ICONS, STATE, UPOWER, fetchDevices, isCancelled, isPeripheral, deviceKey, deviceName} from './utils.js';
+import {
+    ICONS,
+    STATE,
+    UPOWER,
+    deviceKey,
+    deviceName,
+    displayName,
+    fetchDevices,
+    isCancelled,
+    isPeripheral,
+    readDeviceNames,
+} from './utils.js';
 import {HID_BATTERY_BUS_NAME, HID_BATTERY_IFACE, HID_BATTERY_OBJECT_PATH, readHidBattery} from './hidbattery.js';
 
 const S = STATE;
@@ -398,7 +409,10 @@ export default class AmpereExtension extends Extension {
         if (!this._indicator)
             return;
         const hidden = this._settings.get_strv('hidden-devices');
-        const items = [...this._items, ...this._vendorItems].filter(i => !hidden.includes(i.key));
+        const names = readDeviceNames(this._settings);
+        const items = [...this._items, ...this._vendorItems]
+            .filter(i => !hidden.includes(i.key))
+            .map(i => ({...i, name: displayName(i.key, i.name, names)}));
         const signature = JSON.stringify(items);
         if (!force && signature === this._lastSignature)
             return;

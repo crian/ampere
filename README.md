@@ -15,7 +15,7 @@ companion service, which the extension talks to over D-Bus.
 * Optional low-battery notification (once per discharge cycle)
 * Hover card with ring, name, percentage and state
 * Own button, or placed inside the Quick Settings icon row
-* Individual devices can be hidden
+* Individual devices can be hidden or renamed
 
 ## Installation
 
