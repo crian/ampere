@@ -3,6 +3,26 @@
 The version numbers on the left are git tags. EGO assigns its own counter to
 extension uploads; entries that went to EGO note it, so both can be matched up.
 
+## v1.4 – EGO version 5 (2026-11-24)
+
+- Optional low-battery notification (once per discharge cycle, with a 5%
+  hysteresis margin and reset when charging)
+- Custom device names (aliases) in the preferences, shown on the hover card
+  and in low-battery notifications
+- Clicking the panel button in separate mode now opens the preferences
+- Blur my Shell (v78+) opt-in support on the hover card, including dark/light
+  popup styling
+- Preferences: Reset button for colors and charge thresholds, and a toast
+  when copying the companion service install command
+- Track Quick Settings indicator placement via `child-added` instead of
+  polling retries
+- Repository layout: moved the extension into `extension/`, added a
+  `Makefile` and GJS unit tests for the extension helpers
+
+As before, the extension package contains no daemon code. If you use the
+optional companion service, reinstall `ampere-hid` from this release so its
+reported version matches `1.4`.
+
 ## v1.3 – EGO version 4 (2026-11-16)
 
 Supersedes the pending v1.2 upload on EGO with review and lifecycle clean-ups:
