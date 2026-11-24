@@ -113,6 +113,7 @@ export default class AmperePrefs extends ExtensionPreferences {
             const bytes = new GLib.Bytes(new TextEncoder().encode(installCommand));
             copyButton.get_clipboard().set_content(
                 Gdk.ContentProvider.new_for_bytes('text/plain;charset=utf-8', bytes));
+            window.add_toast(new Adw.Toast({title: _('Command copied'), timeout: 2}));
         });
 
         const warning = new Adw.ActionRow({
