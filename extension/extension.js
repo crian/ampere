@@ -7,6 +7,7 @@ import GObject from 'gi://GObject';
 import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import {Extension, gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
@@ -15,6 +16,8 @@ import {HID_BATTERY_BUS_NAME, HID_BATTERY_IFACE, HID_BATTERY_OBJECT_PATH, readHi
 
 const S = STATE;
 const POLL_SECONDS = 30;
+// Margin above threshold-low before a device can notify again without charging.
+const LOW_NOTIFY_HYSTERESIS = 5;
 
 const stateText = state => {
     switch (state) {
@@ -281,6 +284,8 @@ export default class AmpereExtension extends Extension {
         this._items = [];
         this._vendorItems = [];
         this._lastSignature = null;
+        this._notifiedLow = new Set();
+        this._notificationSource = null;
         this._polling = false;
         this._again = false;
 
@@ -399,6 +404,52 @@ export default class AmpereExtension extends Extension {
             return;
         this._lastSignature = signature;
         this._indicator.update(items);
+        this._checkLowBattery(items);
+    }
+
+    _checkLowBattery(items) {
+        if (!this._settings.get_boolean('notify-low')) {
+            this._notifiedLow.clear();
+            return;
+        }
+        const threshold = this._settings.get_int('threshold-low');
+        for (const item of items) {
+            const charging = item.state === S.CHARGING || item.state === S.FULLY_CHARGED;
+            if (charging || item.pct > threshold + LOW_NOTIFY_HYSTERESIS) {
+                this._notifiedLow.delete(item.key);
+                continue;
+            }
+            if (item.pct <= threshold && !this._notifiedLow.has(item.key)) {
+                this._notifiedLow.add(item.key);
+                this._notifyLow(item);
+            }
+        }
+    }
+
+    _ensureNotificationSource() {
+        if (!this._notificationSource) {
+            this._notificationSource = new MessageTray.Source({
+                title: _('Ampere'),
+                iconName: 'battery-caution-symbolic',
+            });
+            this._notificationSource.connect('destroy', () => {
+                this._notificationSource = null;
+            });
+            Main.messageTray.add(this._notificationSource);
+        }
+        return this._notificationSource;
+    }
+
+    _notifyLow(item) {
+        const source = this._ensureNotificationSource();
+        const notification = new MessageTray.Notification({
+            source,
+            title: _('%s battery low').replace('%s', item.name),
+            body: _('%s% remaining').replace('%s', String(item.pct)),
+            iconName: item.icon,
+            urgency: MessageTray.Urgency.NORMAL,
+        });
+        source.addNotification(notification);
     }
 
     disable() {
@@ -419,6 +470,9 @@ export default class AmpereExtension extends Extension {
             this._settings.disconnect(this._settingsId);
         this._settingsId = 0;
         this._settings = null;
+        this._notificationSource?.destroy();
+        this._notificationSource = null;
+        this._notifiedLow = null;
         this._indicator?.destroy();
         this._indicator = null;
         this._items = null;

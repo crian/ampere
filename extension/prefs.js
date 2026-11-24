@@ -69,6 +69,10 @@ export default class AmperePrefs extends ExtensionPreferences {
         addSwitches(_('Info card'), [
             ['hover-card', _('Show on hover'), _('Show name, ring and percentage when hovering the indicator')],
         ]);
+        addSwitches(_('Notifications'), [
+            ['notify-low', _('Low battery notification'),
+                _('Notify once per discharge cycle when a device drops to the low threshold')],
+        ]);
 
         // --- Vendor HID devices (not in UPower) ---
         const vendor = new Adw.PreferencesGroup({

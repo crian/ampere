@@ -12,6 +12,7 @@ companion service, which the extension talks to over D-Bus.
 
 * Icon, bar and percentage per device in the panel
 * Colour coding by charge level and charging state, with configurable thresholds
+* Optional low-battery notification (once per discharge cycle)
 * Hover card with ring, name, percentage and state
 * Own button, or placed inside the Quick Settings icon row
 * Individual devices can be hidden

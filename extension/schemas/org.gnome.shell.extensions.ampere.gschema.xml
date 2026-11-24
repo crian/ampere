@@ -14,6 +14,7 @@
     <key name="color-charging" type="s"><default>'#3584e4'</default><summary>Color while charging (Adwaita accent, blue 3)</summary></key>
     <key name="threshold-medium" type="i"><default>30</default><summary>Up to this percentage the medium color is used</summary></key>
     <key name="threshold-low" type="i"><default>15</default><summary>Up to this percentage the low color is used</summary></key>
+    <key name="notify-low" type="b"><default>false</default><summary>Notify once per discharge cycle when a device drops to the low threshold</summary></key>
     <key name="hidden-devices" type="as"><default>[]</default><summary>Devices that are not shown</summary></key>
     <key name="vendor-hid-enabled" type="b"><default>false</default><summary>Show battery of devices provided by the optional vendor HID companion service (not available in UPower)</summary></key>
   </schema>
