@@ -322,6 +322,7 @@ export default class AmpereExtension extends Extension {
         this._lastSignature = null;
         this._notifiedLow = new Set();
         this._notificationSource = null;
+        this._notificationSourceDestroyId = 0;
         this._polling = false;
         this._again = false;
 
@@ -478,8 +479,9 @@ export default class AmpereExtension extends Extension {
                 title: _('Ampere'),
                 iconName: 'battery-caution-symbolic',
             });
-            this._notificationSource.connect('destroy', () => {
+            this._notificationSourceDestroyId = this._notificationSource.connect('destroy', () => {
                 this._notificationSource = null;
+                this._notificationSourceDestroyId = 0;
             });
             Main.messageTray.add(this._notificationSource);
         }
@@ -516,8 +518,14 @@ export default class AmpereExtension extends Extension {
             this._settings.disconnect(this._settingsId);
         this._settingsId = 0;
         this._settings = null;
-        this._notificationSource?.destroy();
-        this._notificationSource = null;
+        if (this._notificationSource) {
+            if (this._notificationSourceDestroyId) {
+                this._notificationSource.disconnect(this._notificationSourceDestroyId);
+                this._notificationSourceDestroyId = 0;
+            }
+            this._notificationSource.destroy();
+            this._notificationSource = null;
+        }
         this._notifiedLow = null;
         this._indicator?.destroy();
         this._indicator = null;
