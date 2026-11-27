@@ -87,9 +87,7 @@ export default class AmperePrefs extends ExtensionPreferences {
         settings.bind('vendor-hid-enabled', vendorRow, 'active', Gio.SettingsBindFlags.DEFAULT);
         vendor.add(vendorRow);
 
-        // Shown while the service cannot be reached. The command is only
-        // copied, never executed. Three lines read better in the row; the copy
-        // button copies them as is.
+        // Only copied, never executed.
         const installCommand = [
             'cd "$(mktemp -d)"',
             'curl -fsSLo ampere-hid https://github.com/crian/ampere/releases/latest/download/ampere-hid',
@@ -198,8 +196,6 @@ export default class AmperePrefs extends ExtensionPreferences {
         const colorChangedIds = colorKeys.map(key =>
             settings.connect(`changed::${key}`, updateResetSensitive));
 
-        // The low threshold must stay below the medium one; keep it in range
-        // when either value changes.
         const clampThresholds = () => {
             const medium = settings.get_int('threshold-medium');
             const low = settings.get_int('threshold-low');

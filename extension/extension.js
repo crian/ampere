@@ -12,6 +12,7 @@ import {
     ICONS,
     STATE,
     UPOWER,
+    affectsBattery,
     deviceKey,
     deviceName,
     displayName,
@@ -22,7 +23,9 @@ import {
 } from './utils.js';
 import {HID_BATTERY_BUS_NAME, HID_BATTERY_IFACE, HID_BATTERY_OBJECT_PATH, readHidBattery} from './hidbattery.js';
 
-const POLL_SECONDS = 30;
+// Fallback only; UPower property changes trigger a refresh right away.
+const POLL_SECONDS = 60;
+const DEBOUNCE_MS = 500;
 // Margin above threshold-low before a device can notify again without charging.
 const LOW_NOTIFY_HYSTERESIS = 5;
 
@@ -38,6 +41,7 @@ export default class AmpereExtension extends Extension {
         this._notificationSourceDestroyId = 0;
         this._polling = false;
         this._again = false;
+        this._debounceId = 0;
 
         this._indicator = new AmpereIndicator(this._settings, () => this.openPreferences());
         Main.panel.addToStatusArea(this.uuid, this._indicator, 0, 'right');
@@ -50,17 +54,24 @@ export default class AmpereExtension extends Extension {
             }
         });
 
-        // The companion service emits Changed when a value differs.
         this._vendorSignalId = Gio.DBus.session.signal_subscribe(
             HID_BATTERY_BUS_NAME, HID_BATTERY_IFACE, 'Changed', HID_BATTERY_OBJECT_PATH, null,
             Gio.DBusSignalFlags.NONE, () => this._onVendorHidChanged());
 
-        // UPower over D-Bus, asynchronous so the shell never blocks.
         const bus = Gio.DBus.system;
         const onChange = () => this._poll();
         this._subIds = ['DeviceAdded', 'DeviceRemoved'].map(name =>
             bus.signal_subscribe(UPOWER.BUS, UPOWER.BUS, name, UPOWER.ROOT, null,
                 Gio.DBusSignalFlags.NONE, onChange));
+        // arg0 is the interface name, so only device properties match.
+        this._subIds.push(bus.signal_subscribe(
+            UPOWER.BUS, 'org.freedesktop.DBus.Properties', 'PropertiesChanged', null,
+            UPOWER.DEVICE_IFACE, Gio.DBusSignalFlags.NONE,
+            (_conn, _sender, _path, _iface, _signal, params) => {
+                const [, changed] = params.recursiveUnpack();
+                if (affectsBattery(changed))
+                    this._schedulePoll();
+            }));
 
         this._poll();
         this._timerId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, POLL_SECONDS, () => {
@@ -76,6 +87,10 @@ export default class AmpereExtension extends Extension {
         if (this._timerId) {
             GLib.Source.remove(this._timerId);
             this._timerId = 0;
+        }
+        if (this._debounceId) {
+            GLib.Source.remove(this._debounceId);
+            this._debounceId = 0;
         }
         if (this._vendorSignalId) {
             Gio.DBus.session.signal_unsubscribe(this._vendorSignalId);
@@ -105,6 +120,16 @@ export default class AmpereExtension extends Extension {
         this._indicator = null;
         this._items = null;
         this._vendorItems = null;
+    }
+
+    _schedulePoll() {
+        if (this._debounceId)
+            return;
+        this._debounceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, DEBOUNCE_MS, () => {
+            this._debounceId = 0;
+            this._poll();
+            return GLib.SOURCE_REMOVE;
+        });
     }
 
     async _poll() {

@@ -27,7 +27,6 @@ const hexToRgb = hex => {
     return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
 };
 
-// Foreground color of the theme at this actor, i.e. what the other panel icons use.
 const themeColor = actor => {
     const c = actor.get_theme_node().get_foreground_color();
     return [c.red / 255, c.green / 255, c.blue / 255, c.alpha / 255];
@@ -79,7 +78,6 @@ class Indicator extends PanelMenu.Button {
                 this._tooltip.hide();
         });
 
-        // Clicking the button opens the preferences.
         const click = new Clutter.ClickGesture({
             required_button: Clutter.BUTTON_PRIMARY,
         });
@@ -94,7 +92,6 @@ class Indicator extends PanelMenu.Button {
         this._onActivate();
     }
 
-    // Own button next to the quick settings, or inside the quick settings icon row.
     _place() {
         const inQuickSettings = this._settings.get_string('placement') === 'quick-settings';
 
@@ -228,7 +225,6 @@ class Indicator extends PanelMenu.Button {
 
         const s = this._settings;
         for (const item of items) {
-            // Panel: icon | vertical bar | percentage (1 px apart, via CSS)
             const row = new St.BoxLayout({style_class: 'ampere-item', y_align: Clutter.ActorAlign.CENTER});
             if (s.get_boolean('show-icon'))
                 row.add_child(new St.Icon({icon_name: item.icon, icon_size: 16, y_align: Clutter.ActorAlign.CENTER}));

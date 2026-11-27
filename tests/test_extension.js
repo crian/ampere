@@ -7,6 +7,7 @@ import System from 'system';
 import {
     KIND,
     STATE,
+    affectsBattery,
     deviceKey,
     deviceName,
     displayName,
@@ -103,6 +104,15 @@ test('readDeviceNames and writeDeviceNames round-trip a{ss} variants', () => {
     assertEqual(readDeviceNames(fakeSettings), {'vendor:1': 'Maya X', 'ABC': 'Keyboard'});
     writeDeviceNames(fakeSettings, {});
     assertEqual(readDeviceNames(fakeSettings), {});
+});
+
+test('affectsBattery reacts to the properties the panel reads', () => {
+    assertEqual(affectsBattery({Percentage: 1}), true);
+    assertEqual(affectsBattery({State: 1, Voltage: 2}), true);
+    assertEqual(affectsBattery({IsPresent: false}), true);
+    assertEqual(affectsBattery({Type: 5}), true);
+    assertEqual(affectsBattery({UpdateTime: 1795768703, IconName: 'battery-full-symbolic'}), false);
+    assertEqual(affectsBattery({}), false);
 });
 
 test('isCancelled matches only Gio.IOErrorEnum.CANCELLED', () => {

@@ -3,7 +3,7 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
-import {ICONS, KIND, STATE, dbusCall, isCancelled} from './utils.js';
+import {ICONS, KIND, STATE, isCancelled} from './utils.js';
 
 // Session-bus service of the optional companion daemon; the extension never
 // spawns it itself.
@@ -56,7 +56,7 @@ export const parse = json => {
 /** Async query for the shell. ok is false if the companion daemon is missing. */
 export async function readHidBattery(cancellable) {
     try {
-        const reply = await dbusCall(Gio.DBus.session,
+        const reply = await Gio.DBus.session.call(
             HID_BATTERY_BUS_NAME, HID_BATTERY_OBJECT_PATH, HID_BATTERY_IFACE,
             'GetDevices', null, new GLib.VariantType('(s)'), Gio.DBusCallFlags.NONE, 5000,
             cancellable);
