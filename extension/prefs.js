@@ -22,6 +22,7 @@ import {
     HID_BATTERY_IFACE,
     HID_BATTERY_OBJECT_PATH,
     readHidBattery,
+    readHidVersion,
 } from './hidbattery.js';
 
 const toHex = rgba =>
@@ -106,14 +107,23 @@ export default class AmperePrefs extends ExtensionPreferences {
             window.add_toast(new Adw.Toast({title: _('Command copied'), timeout: 2}));
         });
 
-        const warning = new Adw.ActionRow({
-            title: _('Companion service not running'),
-            subtitle: `<tt>${GLib.markup_escape_text(installCommand, -1)}</tt>`,
+        const service = new Adw.ActionRow({
             use_markup: true,
             visible: false,
         });
-        warning.add_suffix(copyButton);
-        vendor.add(warning);
+        service.add_suffix(copyButton);
+        vendor.add(service);
+
+        const showService = (ok, version) => {
+            service.visible = true;
+            service.title = ok ? _('Companion service') : _('Companion service not running');
+            if (!ok)
+                service.subtitle = `<tt>${GLib.markup_escape_text(installCommand, -1)}</tt>`;
+            else if (version)
+                service.subtitle = _('Version %s').replace('%s', GLib.markup_escape_text(version, -1));
+            else
+                service.subtitle = _('Version unknown');
+        };
         page.add(vendor);
 
         const colorKeys = [
@@ -241,16 +251,20 @@ export default class AmperePrefs extends ExtensionPreferences {
                     const result = await readHidBattery(cancellable);
                     if (cancellable.is_cancelled())
                         return;
-                    warning.visible = !result.ok;
+                    const version = result.ok ? await readHidVersion(cancellable) : null;
+                    if (cancellable.is_cancelled())
+                        return;
+                    showService(result.ok, version);
                     for (const item of result.items)
                         devices.set(item.key, item.name);
                 } catch (e) {
                     if (isCancelled(e))
                         return;
                     console.error(`[ampere] cannot read vendor HID devices: ${e}`);
+                    showService(false, null);
                 }
             } else {
-                warning.visible = false;
+                service.visible = false;
             }
 
             if (cancellable.is_cancelled())

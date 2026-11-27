@@ -73,7 +73,7 @@ chmod +x ampere-hid
 ./ampere-hid install --udev
 ```
 
-Then enable **Show vendor HID battery** in the extension preferences. If the service is not running, the preferences show the install command again.
+Then enable **Show vendor HID battery** in the extension preferences. The preferences show the running service version, or the install command when it is not running. The extension works with `ampere-hid` v1.2 or newer.
 
 To check the download, fetch `ampere-hid.sha256` from the same release and run `sha256sum -c ampere-hid.sha256` next to the file. That catches a broken or truncated download; it does not prove that the release itself is genuine.
 

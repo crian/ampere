@@ -53,6 +53,23 @@ export const parse = json => {
         }));
 };
 
+/** Version of the running service; null when it cannot be read. */
+export async function readHidVersion(cancellable) {
+    try {
+        const reply = await Gio.DBus.session.call(
+            HID_BATTERY_BUS_NAME, HID_BATTERY_OBJECT_PATH,
+            'org.freedesktop.DBus.Properties', 'Get',
+            new GLib.Variant('(ss)', [HID_BATTERY_IFACE, 'Version']),
+            new GLib.VariantType('(v)'), Gio.DBusCallFlags.NONE, 5000, cancellable);
+        const [version] = reply.recursiveUnpack();
+        return String(version);
+    } catch (e) {
+        if (isCancelled(e))
+            throw e;
+        return null;
+    }
+}
+
 /** Async query for the shell. ok is false if the companion daemon is missing. */
 export async function readHidBattery(cancellable) {
     try {
