@@ -21,9 +21,7 @@ import {
     HID_BATTERY_BUS_NAME,
     HID_BATTERY_IFACE,
     HID_BATTERY_OBJECT_PATH,
-    daemonTooOld,
     readHidBattery,
-    readHidVersion,
 } from './hidbattery.js';
 
 const toHex = rgba =>
@@ -38,12 +36,8 @@ export default class AmperePrefs extends ExtensionPreferences {
         });
         window.add(page);
 
-        // Everything below is built without waiting for D-Bus, so the window
-        // opens immediately; the device list fills in when the answers arrive.
         const cancellable = new Gio.Cancellable();
-        window.connect('destroy', () => cancellable.cancel());
 
-        // --- Placement ---
         const placement = new Adw.PreferencesGroup({title: _('Placement')});
         const values = ['separate', 'quick-settings'];
         const combo = new Adw.ComboRow({
@@ -58,7 +52,6 @@ export default class AmperePrefs extends ExtensionPreferences {
         placement.add(combo);
         page.add(placement);
 
-        // --- Switches ---
         const addSwitches = (title, rows) => {
             const group = new Adw.PreferencesGroup({title});
             for (const [key, rowTitle, subtitle] of rows) {
@@ -82,7 +75,6 @@ export default class AmperePrefs extends ExtensionPreferences {
                 _('Notify once per discharge cycle when a device drops to the low threshold')],
         ]);
 
-        // --- Vendor HID devices (not in UPower) ---
         const vendor = new Adw.PreferencesGroup({
             title: _('Vendor HID devices'),
             description: _('Optional: devices that do not report their battery to UPower, ' +
@@ -95,9 +87,9 @@ export default class AmperePrefs extends ExtensionPreferences {
         settings.bind('vendor-hid-enabled', vendorRow, 'active', Gio.SettingsBindFlags.DEFAULT);
         vendor.add(vendorRow);
 
-        // Shown while the service is missing or older than the extension. The
-        // command is only copied, never executed.
-        // Three lines read better in the row; the copy button copies them as is.
+        // Shown while the service cannot be reached. The command is only
+        // copied, never executed. Three lines read better in the row; the copy
+        // button copies them as is.
         const installCommand = [
             'cd "$(mktemp -d)"',
             'curl -fsSLo ampere-hid https://github.com/crian/ampere/releases/latest/download/ampere-hid',
@@ -124,23 +116,8 @@ export default class AmperePrefs extends ExtensionPreferences {
         });
         warning.add_suffix(copyButton);
         vendor.add(warning);
-        // version: undefined = not asked, null = no Version property yet.
-        const extensionVersion = this.metadata?.['version-name'] ?? 'dev';
-        const serviceWarning = (ok, version) => {
-            const outdated = ok && daemonTooOld(version, extensionVersion);
-            if (!outdated) {
-                warning.title = _('Companion service not running');
-            } else if (version) {
-                warning.title = _('Companion service %s is outdated')
-                    .replace('%s', version);
-            } else {
-                warning.title = _('Companion service is outdated');
-            }
-            warning.visible = !ok || outdated;
-        };
         page.add(vendor);
 
-        // --- Level colors ---
         const colorKeys = [
             'color-high',
             'color-medium',
@@ -220,10 +197,6 @@ export default class AmperePrefs extends ExtensionPreferences {
         });
         const colorChangedIds = colorKeys.map(key =>
             settings.connect(`changed::${key}`, updateResetSensitive));
-        window.connect('destroy', () => {
-            for (const id of colorChangedIds)
-                settings.disconnect(id);
-        });
 
         // The low threshold must stay below the medium one; keep it in range
         // when either value changes.
@@ -235,12 +208,7 @@ export default class AmperePrefs extends ExtensionPreferences {
         };
         const thresholdMedId = settings.connect('changed::threshold-medium', clampThresholds);
         const thresholdLowId = settings.connect('changed::threshold-low', clampThresholds);
-        window.connect('destroy', () => {
-            settings.disconnect(thresholdMedId);
-            settings.disconnect(thresholdLowId);
-        });
 
-        // --- Devices, filled asynchronously ---
         const group = new Adw.PreferencesGroup({
             title: _('Devices'),
             description: _('Choose which devices are shown or give them custom names. ' +
@@ -250,8 +218,6 @@ export default class AmperePrefs extends ExtensionPreferences {
         group.add(loading);
         page.add(group);
 
-        // The rows are rebuilt when the vendor switch changes, so enabling it
-        // fills the list without closing and reopening the window.
         let rows = [];
         let signature = null;
         let running = false;
@@ -273,23 +239,13 @@ export default class AmperePrefs extends ExtensionPreferences {
             if (cancellable.is_cancelled())
                 return;
 
-            // The vendor service is only asked when it is enabled, so opening
-            // the window neither starts the daemon nor blocks on it.
+            // Only asked when enabled, so opening the window never starts the daemon.
             if (settings.get_boolean('vendor-hid-enabled')) {
                 try {
                     const result = await readHidBattery(cancellable);
-                    let version;
-                    if (result.ok) {
-                        try {
-                            version = await readHidVersion(cancellable);
-                        } catch (e) {
-                            if (isCancelled(e))
-                                return;
-                        }
-                    }
                     if (cancellable.is_cancelled())
                         return;
-                    serviceWarning(result.ok, version);
+                    warning.visible = !result.ok;
                     for (const item of result.items)
                         devices.set(item.key, item.name);
                 } catch (e) {
@@ -298,7 +254,7 @@ export default class AmperePrefs extends ExtensionPreferences {
                     console.error(`[ampere] cannot read vendor HID devices: ${e}`);
                 }
             } else {
-                serviceWarning(true);
+                warning.visible = false;
             }
 
             if (cancellable.is_cancelled())
@@ -312,10 +268,8 @@ export default class AmperePrefs extends ExtensionPreferences {
                     devices.set(key, disconnected(key));
             }
 
-            // A Changed on every new percentage would otherwise rebuild the
-            // rows while the user is clicking in them.
-            const current = [...devices].map(([key, name]) => `${key}\t${name}`).join('\n') +
-                `\n--\n${[...hidden].join('\n')}`;
+            // Skip the rebuild when nothing changed, so rows stay usable while clicking.
+            const current = JSON.stringify([[...devices], [...hidden]]);
             if (current === signature && rows.length)
                 return;
             signature = current;
@@ -427,17 +381,23 @@ export default class AmperePrefs extends ExtensionPreferences {
         const vendorSettingsId = settings.connect('changed::vendor-hid-enabled', () => {
             refreshDevices();
         });
-        window.connect('destroy', () => settings.disconnect(vendorSettingsId));
 
-        // A freshly started service answers with an empty cache first; the
-        // Changed it emits after its first sweep fills the list.
         const changedId = Gio.DBus.session.signal_subscribe(
             HID_BATTERY_BUS_NAME, HID_BATTERY_IFACE, 'Changed', HID_BATTERY_OBJECT_PATH, null,
             Gio.DBusSignalFlags.NONE, () => {
                 if (settings.get_boolean('vendor-hid-enabled'))
                     refreshDevices();
             });
-        window.connect('destroy', () => Gio.DBus.session.signal_unsubscribe(changedId));
+
+        window.connect('destroy', () => {
+            cancellable.cancel();
+            for (const id of colorChangedIds)
+                settings.disconnect(id);
+            settings.disconnect(thresholdMedId);
+            settings.disconnect(thresholdLowId);
+            settings.disconnect(vendorSettingsId);
+            Gio.DBus.session.signal_unsubscribe(changedId);
+        });
 
         refreshDevices();
     }

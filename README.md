@@ -30,7 +30,7 @@ Mice that only expose their battery through vendor HID reports (Lamzu, MCHOSE, A
 Everything you need to keep an eye on your wireless gear, and nothing you do not.
 
 &nbsp;✓&nbsp; **Clean panel indicator**: toggle icon, vertical battery bar and percentage independently.<br>
-&nbsp;✓&nbsp; **Flexible placement**: own button next to Quick Settings (click to open preferences), or tucked right inside the Quick Settings icon row.<br>
+&nbsp;✓&nbsp; **Placement choice**: own top-bar button next to Quick Settings (click it to open the preferences), or between the other system icons.<br>
 &nbsp;✓&nbsp; **Hover card**: battery ring, device name, percentage and charging state on hover — with native **Blur my Shell** (v78+) support.<br>
 &nbsp;✓&nbsp; **Custom colors and thresholds**: Adwaita defaults for high, medium, low and charging states, or monochrome mode, with one-click reset.<br>
 &nbsp;✓&nbsp; **Low-battery notifications**: optional alert once per discharge cycle when a device drops to the low threshold.<br>
@@ -73,7 +73,7 @@ chmod +x ampere-hid
 ./ampere-hid install --udev
 ```
 
-Then enable **Show vendor HID battery** in the extension preferences. The preferences also let you know when the installed service is older than the extension expects — run the same commands again to update it.
+Then enable **Show vendor HID battery** in the extension preferences. If the service is not running, the preferences show the install command again.
 
 To check the download, fetch `ampere-hid.sha256` from the same release and run `sha256sum -c ampere-hid.sha256` next to the file. That catches a broken or truncated download; it does not prove that the release itself is genuine.
 
@@ -146,7 +146,7 @@ If all of that looks right and the panel stays empty, open an issue with the out
 
 ## Requirements
 
-- **GNOME Shell 48–51**
+- **GNOME Shell 49–51**
 - Nothing extra for the extension itself
 - For the optional companion service: **Python 3.8+** with PyGObject (`python3-gi`)
 

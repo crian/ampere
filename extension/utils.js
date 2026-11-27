@@ -52,11 +52,7 @@ export function isPeripheral(p) {
     return ![KIND.UNKNOWN, KIND.LINE_POWER, KIND.BATTERY, KIND.UPS, KIND.MONITOR].includes(p.Type);
 }
 
-/**
- * Stable key for a device. Two identical devices without a serial would
- * otherwise collapse into one entry, so fall back to the sysfs path, which is
- * unique per device and does not change while it stays on the same port.
- */
+/** Stable key for a device; without a serial the sysfs path keeps identical devices apart. */
 export function deviceKey(p) {
     if (p.Serial)
         return p.Serial;
@@ -81,7 +77,7 @@ export function writeDeviceNames(settings, names) {
 }
 
 export function displayName(key, fallback, names) {
-    const custom = names?.[key]?.trim();
+    const custom = names[key]?.trim();
     return custom || fallback;
 }
 
@@ -91,8 +87,7 @@ export async function fetchDevices(cancellable) {
     const reply = await dbusCall(conn, BUS, ROOT, BUS, 'EnumerateDevices', null,
         new GLib.VariantType('(ao)'), Gio.DBusCallFlags.NONE, TIMEOUT_MS, cancellable);
     const [paths] = reply.deepUnpack();
-    // Promise.all keeps the order of `paths`, so the panel keeps it too.
-    // Pushing as the answers arrive would reshuffle the entries each poll.
+    // Promise.all keeps the order of `paths`, so the panel order stays stable.
     const devices = await Promise.all(paths.map(async path => {
         try {
             const r = await dbusCall(conn, BUS, path, 'org.freedesktop.DBus.Properties', 'GetAll',

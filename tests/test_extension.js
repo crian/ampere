@@ -15,7 +15,7 @@ import {
     readDeviceNames,
     writeDeviceNames,
 } from '../extension/utils.js';
-import {daemonTooOld, parse} from '../extension/hidbattery.js';
+import {parse} from '../extension/hidbattery.js';
 
 let passed = 0;
 let failed = 0;
@@ -48,8 +48,6 @@ function test(name, fn) {
         printerr(`FAIL - ${name}: ${e.message}`);
     }
 }
-
-// --- utils.js ---
 
 test('isPeripheral accepts present non-supply peripheral devices', () => {
     for (const type of [
@@ -90,7 +88,6 @@ test('displayName applies trimmed alias and falls back cleanly', () => {
     assertEqual(displayName('k2', '2.4G Receiver', names), '2.4G Receiver');
     assertEqual(displayName('k3', '2.4G Receiver', names), '2.4G Receiver');
     assertEqual(displayName('other', 'Fallback', names), 'Fallback');
-    assertEqual(displayName('k1', 'Fallback', null), 'Fallback');
 });
 
 test('readDeviceNames and writeDeviceNames round-trip a{ss} variants', () => {
@@ -114,22 +111,6 @@ test('isCancelled matches only Gio.IOErrorEnum.CANCELLED', () => {
     assertEqual(isCancelled(cancelled), true);
     assertEqual(isCancelled(failedErr), false);
     assertEqual(isCancelled(new Error('plain')), false);
-});
-
-// --- hidbattery.js ---
-
-test('daemonTooOld compares version strings and special values', () => {
-    assertEqual(daemonTooOld(null, '1.3'), true, 'null predates Version property');
-    assertEqual(daemonTooOld('dev', '1.3'), false, 'dev service');
-    assertEqual(daemonTooOld('1.0', 'dev'), false, 'dev extension');
-    assertEqual(daemonTooOld('1.2', '1.3'), true);
-    assertEqual(daemonTooOld('1.2.9', '1.3'), true);
-    assertEqual(daemonTooOld('1.3', '1.3'), false);
-    assertEqual(daemonTooOld('1.3.1', '1.3'), false);
-    assertEqual(daemonTooOld('1.3', '1.3.1'), true);
-    assertEqual(daemonTooOld('2.0', '1.9'), false);
-    assertEqual(daemonTooOld('unknown', '1.3'), false);
-    assertEqual(daemonTooOld(undefined, '1.3'), false);
 });
 
 test('parse maps valid daemon devices and filters invalid percentages', () => {
