@@ -13,7 +13,7 @@ PACKAGE  := $(BUILD)/$(UUID).shell-extension.zip
 DEV_LINK := $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
 
 # Runtime modules that `gnome-extensions pack` does not pick up on its own.
-EXTRA_SOURCES := utils.js hidbattery.js
+EXTRA_SOURCES := utils.js hidbattery.js indicator.js
 
 .PHONY: help schemas pack check-pack install uninstall dev undev lint \
         test test-py test-js daemon daemon-install daemon-uninstall clean
