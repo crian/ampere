@@ -9,6 +9,6 @@
   ],
   "settings-schema": "org.gnome.shell.extensions.ampere",
   "gettext-domain": "ampere@crian",
-  "version-name": "1.5",
+  "version-name": "1.6",
   "url": "https://github.com/crian/ampere"
 }

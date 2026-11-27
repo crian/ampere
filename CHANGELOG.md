@@ -3,6 +3,30 @@
 The version numbers on the left are git tags. EGO assigns its own counter to
 extension uploads; entries that went to EGO note it, so both can be matched up.
 
+## v1.6 – EGO version 7 (2026-11-27)
+
+- Extension: split the panel indicator and its drawing helpers into
+  `indicator.js`; `extension.js` is now only the entry point
+- Extension: require GNOME Shell 49+ and use `Clutter.ClickGesture`
+  unconditionally
+- Extension: refresh on UPower property changes and keep a 60 s fallback poll
+  instead of polling every 30 s
+- Extension: drop defensive code that could not trigger (try/catch around
+  `openPreferences()` and the theme color), remove optional chaining on members
+  that always exist, shorten comments
+- Extension: reuse one icon table for UPower and vendor devices
+- Extension: low-battery notification uses a fixed title and the device name in
+  the body
+- Extension: use `Gio._promisify` for D-Bus calls; the preferences process does
+  not load `js/ui/environment.js`, so it needs its own promisify
+- Preferences: show the running companion service version instead of comparing
+  it with the extension; the install command and its copy button stay
+- Preferences: one `destroy` handler on the window instead of five
+
+As before, the extension package contains no daemon code. This release does not
+change the companion service, so an existing `ampere-hid` keeps working; the
+preferences now show which version is running.
+
 ## v1.5 – EGO version 6 (2026-11-24)
 
 Supersedes the pending v1.4 upload on EGO:
